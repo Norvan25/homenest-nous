@@ -1,6 +1,8 @@
 'use client'
 
 import { useState, useMemo } from 'react'
+import { useRouter } from 'next/navigation'
+import { createClient } from '@supabase/supabase-js'
 import { 
   Users, 
   ShoppingCart,
@@ -22,10 +24,16 @@ import {
   Send,
   Filter,
   CheckSquare,
-  Square
+  Square,
+  Loader2
 } from 'lucide-react'
 import { PropertyCard } from './PropertyCard'
 import { FilterDropdown } from './FilterDropdown'
+
+const supabase = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+)
 
 // Types
 interface Phone {
@@ -137,9 +145,15 @@ const expiredDateOptions = [
 ]
 
 export default function NorLeadApp({ initialLeads, filterOptions, stats }: Props) {
+  const router = useRouter()
+  
   // Main section state
   const [activeSection, setActiveSection] = useState<'sellers' | 'buyers'>('sellers')
   const [activeCategory, setActiveCategory] = useState('expired')
+  
+  // Transfer state
+  const [isTransferring, setIsTransferring] = useState(false)
+  const [transferResult, setTransferResult] = useState<{ success: number; existing: number } | null>(null)
 
   // Filter state
   const [selectedCities, setSelectedCities] = useState<string[]>([])
@@ -351,13 +365,87 @@ export default function NorLeadApp({ initialLeads, filterOptions, stats }: Props
     contactFilter !== 'all'
   ].filter(Boolean).length
 
-  const handleTransferToCRM = () => {
-    // TODO: Implement transfer to NorCRM
-    console.log('Transferring to CRM:', {
-      phones: Array.from(selectedPhones),
-      emails: Array.from(selectedEmails)
-    })
-    alert(`Ready to transfer:\n${selectedPhones.size} phones\n${selectedEmails.size} emails\n\nNorCRM integration coming soon!`)
+  const handleTransferToCRM = async () => {
+    setIsTransferring(true)
+    setTransferResult(null)
+
+    try {
+      // Get unique property IDs from selected phones and emails
+      const propertyIds = new Set<string>()
+      
+      initialLeads.forEach(lead => {
+        lead.contacts?.forEach(contact => {
+          // Check if any phone from this contact is selected
+          const hasSelectedPhone = contact.phones?.some(p => selectedPhones.has(p.id))
+          // Check if any email from this contact is selected
+          const hasSelectedEmail = contact.emails?.some(e => selectedEmails.has(e.id))
+          
+          if (hasSelectedPhone || hasSelectedEmail) {
+            propertyIds.add(lead.id)
+          }
+        })
+      })
+
+      if (propertyIds.size === 0) {
+        alert('No properties selected')
+        setIsTransferring(false)
+        return
+      }
+
+      // Check which property IDs already exist in crm_leads
+      const { data: existingLeads } = await supabase
+        .from('crm_leads')
+        .select('property_id')
+        .in('property_id', Array.from(propertyIds))
+
+      const existingPropertyIds = new Set(existingLeads?.map(l => l.property_id) || [])
+      
+      // Filter to only new property IDs
+      const newPropertyIds = Array.from(propertyIds).filter(id => !existingPropertyIds.has(id))
+
+      let successCount = 0
+
+      // Insert new leads into crm_leads
+      if (newPropertyIds.length > 0) {
+        const leadsToInsert = newPropertyIds.map(property_id => ({
+          property_id,
+          status: 'new' as const,
+          priority: 'normal' as const,
+        }))
+
+        const { data, error } = await supabase
+          .from('crm_leads')
+          .insert(leadsToInsert)
+          .select()
+
+        if (error) {
+          console.error('Error inserting leads:', error)
+          alert('Error transferring leads. Please try again.')
+          setIsTransferring(false)
+          return
+        }
+
+        successCount = data?.length || 0
+      }
+
+      setTransferResult({
+        success: successCount,
+        existing: existingPropertyIds.size
+      })
+
+      // Clear selections
+      clearSelection()
+
+    } catch (error) {
+      console.error('Transfer error:', error)
+      alert('Error transferring leads. Please try again.')
+    }
+
+    setIsTransferring(false)
+  }
+
+  const goToCRM = () => {
+    router.push('/norcrm')
   }
 
   return (
@@ -616,37 +704,86 @@ export default function NorLeadApp({ initialLeads, filterOptions, stats }: Props
           </div>
 
           {/* Selection Action Bar */}
-          {(selectedPhones.size > 0 || selectedEmails.size > 0) && (
+          {(selectedPhones.size > 0 || selectedEmails.size > 0 || transferResult) && (
             <div className="sticky top-0 z-20 bg-navy-900/95 backdrop-blur border border-norx/30 rounded-xl p-4 mb-6 shadow-lg shadow-norx/10">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-6">
-                  <div className="flex items-center gap-2">
-                    <Phone size={18} className="text-emerald-400" />
-                    <span className="text-white font-medium">{selectedPhones.size}</span>
-                    <span className="text-white/50">phones</span>
+              {transferResult ? (
+                // Transfer Result
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-full bg-green-500/20 flex items-center justify-center">
+                      <Check size={20} className="text-green-400" />
+                    </div>
+                    <div>
+                      <div className="text-white font-medium">
+                        {transferResult.success > 0 
+                          ? `${transferResult.success} lead${transferResult.success > 1 ? 's' : ''} transferred to CRM`
+                          : 'All selected leads already in CRM'
+                        }
+                      </div>
+                      {transferResult.existing > 0 && transferResult.success > 0 && (
+                        <div className="text-white/50 text-sm">
+                          {transferResult.existing} already existed
+                        </div>
+                      )}
+                    </div>
                   </div>
                   <div className="flex items-center gap-2">
-                    <Mail size={18} className="text-amber-400" />
-                    <span className="text-white font-medium">{selectedEmails.size}</span>
-                    <span className="text-white/50">emails</span>
+                    <button
+                      onClick={() => setTransferResult(null)}
+                      className="px-4 py-2 rounded-lg bg-white/5 text-white/70 hover:text-white transition-colors"
+                    >
+                      Dismiss
+                    </button>
+                    <button
+                      onClick={goToCRM}
+                      className="px-4 py-2 rounded-lg bg-norv text-white font-medium flex items-center gap-2 hover:bg-norv/80 transition-colors"
+                    >
+                      Go to NorCRM
+                    </button>
                   </div>
                 </div>
-                <div className="flex items-center gap-2">
-                  <button
-                    onClick={clearSelection}
-                    className="px-4 py-2 rounded-lg bg-white/5 text-white/70 hover:text-white transition-colors"
-                  >
-                    Clear
-                  </button>
-                  <button
-                    onClick={handleTransferToCRM}
-                    className="px-4 py-2 rounded-lg bg-norx text-white font-medium flex items-center gap-2 hover:bg-norx/80 transition-colors"
-                  >
-                    <Send size={16} />
-                    Transfer to NorCRM
-                  </button>
+              ) : (
+                // Selection Bar
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-6">
+                    <div className="flex items-center gap-2">
+                      <Phone size={18} className="text-emerald-400" />
+                      <span className="text-white font-medium">{selectedPhones.size}</span>
+                      <span className="text-white/50">phones</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Mail size={18} className="text-amber-400" />
+                      <span className="text-white font-medium">{selectedEmails.size}</span>
+                      <span className="text-white/50">emails</span>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={clearSelection}
+                      className="px-4 py-2 rounded-lg bg-white/5 text-white/70 hover:text-white transition-colors"
+                    >
+                      Clear
+                    </button>
+                    <button
+                      onClick={handleTransferToCRM}
+                      disabled={isTransferring}
+                      className="px-4 py-2 rounded-lg bg-norv text-white font-medium flex items-center gap-2 hover:bg-norv/80 disabled:opacity-50 transition-colors"
+                    >
+                      {isTransferring ? (
+                        <>
+                          <Loader2 size={16} className="animate-spin" />
+                          Transferring...
+                        </>
+                      ) : (
+                        <>
+                          <Send size={16} />
+                          Transfer to NorCRM
+                        </>
+                      )}
+                    </button>
+                  </div>
                 </div>
-              </div>
+              )}
             </div>
           )}
 

@@ -284,6 +284,73 @@ export interface Database {
           imported_at?: string
         }
       }
+      crm_leads: {
+        Row: {
+          id: string
+          property_id: string
+          status: 'new' | 'contacted' | 'interested' | 'appointment' | 'closed' | 'dead'
+          priority: 'hot' | 'normal' | 'low'
+          next_action: string | null
+          next_action_date: string | null
+          last_activity_date: string | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          property_id: string
+          status?: 'new' | 'contacted' | 'interested' | 'appointment' | 'closed' | 'dead'
+          priority?: 'hot' | 'normal' | 'low'
+          next_action?: string | null
+          next_action_date?: string | null
+          last_activity_date?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          property_id?: string
+          status?: 'new' | 'contacted' | 'interested' | 'appointment' | 'closed' | 'dead'
+          priority?: 'hot' | 'normal' | 'low'
+          next_action?: string | null
+          next_action_date?: string | null
+          last_activity_date?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+      }
+      crm_activities: {
+        Row: {
+          id: string
+          crm_lead_id: string
+          activity_type: 'call' | 'email' | 'note' | 'status_change'
+          outcome: string | null
+          notes: string | null
+          contact_id: string | null
+          phone_id: string | null
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          crm_lead_id: string
+          activity_type: 'call' | 'email' | 'note' | 'status_change'
+          outcome?: string | null
+          notes?: string | null
+          contact_id?: string | null
+          phone_id?: string | null
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          crm_lead_id?: string
+          activity_type?: 'call' | 'email' | 'note' | 'status_change'
+          outcome?: string | null
+          notes?: string | null
+          contact_id?: string | null
+          phone_id?: string | null
+          created_at?: string
+        }
+      }
     }
     Views: {
       callable_leads: {
@@ -314,6 +381,34 @@ export interface Database {
           last_result: string | null
         }
       }
+      crm_leads_full: {
+        Row: {
+          id: string
+          property_id: string
+          status: string
+          priority: string
+          next_action: string | null
+          next_action_date: string | null
+          last_activity_date: string | null
+          crm_created_at: string
+          crm_updated_at: string
+          street_address: string
+          city: string
+          state: string | null
+          zip: string | null
+          price: number | null
+          sqft: number | null
+          beds: number | null
+          baths: number | null
+          year_built: number | null
+          list_date: string | null
+          dom: number | null
+          property_status: string | null
+          callable_phones: number
+          total_emails: number
+          total_contacts: number
+        }
+      }
     }
     Functions: {}
     Enums: {}
@@ -327,3 +422,11 @@ export type Phone = Database['public']['Tables']['phones']['Row']
 export type Email = Database['public']['Tables']['emails']['Row']
 export type CallLog = Database['public']['Tables']['call_log']['Row']
 export type CallableLead = Database['public']['Views']['callable_leads']['Row']
+export type CrmLead = Database['public']['Tables']['crm_leads']['Row']
+export type CrmActivity = Database['public']['Tables']['crm_activities']['Row']
+export type CrmLeadFull = Database['public']['Views']['crm_leads_full']['Row']
+
+// CRM Status and Priority types
+export type CrmStatus = 'new' | 'contacted' | 'interested' | 'appointment' | 'closed' | 'dead'
+export type CrmPriority = 'hot' | 'normal' | 'low'
+export type ActivityType = 'call' | 'email' | 'note' | 'status_change'

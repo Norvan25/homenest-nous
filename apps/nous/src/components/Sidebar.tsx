@@ -74,7 +74,7 @@ const axes = [
     color: 'bg-norv',
     icon: Zap,
     tools: [
-      { name: 'NorCRM', path: '/norcrm', active: false, description: 'Lead management' },
+      { name: 'NorCRM', path: '/norcrm', active: true, description: 'Lead management' },
       { name: 'NorBot', path: '/norbot', active: false, description: '24/7 chat assistant' },
     ]
   },
