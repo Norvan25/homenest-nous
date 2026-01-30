@@ -21,8 +21,12 @@ import {
   PhoneCall,
   FileText,
   Flame,
-  CalendarX
+  CalendarX,
+  MoreVertical,
+  LogOut,
+  Trash2
 } from 'lucide-react'
+import { DropdownMenu } from '@/components/ui'
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -93,6 +97,8 @@ interface Props {
   lead: CRMLead
   onClose: () => void
   onUpdate: (lead: CRMLead) => void
+  onRemoveFromCRM?: () => void
+  onDeleteCompletely?: () => void
 }
 
 const statusOptions = [
@@ -125,7 +131,7 @@ const answeredOutcomes = [
   { value: 'appointment_set', label: 'Appointment Set' },
 ]
 
-export function LeadDetailPanel({ lead, onClose, onUpdate }: Props) {
+export function LeadDetailPanel({ lead, onClose, onUpdate, onRemoveFromCRM, onDeleteCompletely }: Props) {
   // Form state
   const [status, setStatus] = useState(lead.status)
   const [priority, setPriority] = useState(lead.priority)
@@ -324,12 +330,31 @@ export function LeadDetailPanel({ lead, onClose, onUpdate }: Props) {
         <div className="sticky top-0 bg-navy-800 border-b border-white/10 p-4 z-10">
           <div className="flex items-center justify-between mb-3">
             <h2 className="text-lg font-semibold text-white">Lead Details</h2>
-            <button
-              onClick={onClose}
-              className="p-2 rounded-lg bg-white/5 text-white/50 hover:text-white transition-colors"
-            >
-              <X size={20} />
-            </button>
+            <div className="flex items-center gap-2">
+              {(onRemoveFromCRM || onDeleteCompletely) && (
+                <DropdownMenu
+                  items={[
+                    ...(onRemoveFromCRM ? [{
+                      label: 'Remove from CRM',
+                      icon: <LogOut size={16} />,
+                      onClick: onRemoveFromCRM
+                    }] : []),
+                    ...(onDeleteCompletely ? [{
+                      label: 'Delete Completely',
+                      icon: <Trash2 size={16} />,
+                      onClick: onDeleteCompletely,
+                      variant: 'danger' as const
+                    }] : [])
+                  ]}
+                />
+              )}
+              <button
+                onClick={onClose}
+                className="p-2 rounded-lg bg-white/5 text-white/50 hover:text-white transition-colors"
+              >
+                <X size={20} />
+              </button>
+            </div>
           </div>
 
           {/* Address */}

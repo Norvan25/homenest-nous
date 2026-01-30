@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useMemo } from 'react'
+import { createClient } from '@supabase/supabase-js'
 import { 
   Users,
   Phone,
@@ -17,9 +18,21 @@ import {
   DollarSign,
   Home,
   Flame,
-  AlertCircle
+  AlertCircle,
+  Trash2,
+  LogOut,
+  CheckSquare,
+  Square
 } from 'lucide-react'
 import { LeadDetailPanel } from './LeadDetailPanel'
+import { ConfirmDialog } from '@/components/ui'
+import { useToast } from '@/components/ui/Toast'
+import { CallQueueButton, CallQueuePanel } from '@/components/call-queue'
+
+const supabase = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+)
 
 // Types
 interface Property {
@@ -87,6 +100,7 @@ const priorityColors: Record<string, { bg: string; text: string; icon: any }> = 
 }
 
 export default function NorCRMApp({ initialStats, initialLeads }: Props) {
+  const { showToast } = useToast()
   const [leads, setLeads] = useState<CRMLead[]>(initialLeads)
   const [stats, setStats] = useState<Stats>(initialStats)
   
@@ -98,6 +112,21 @@ export default function NorCRMApp({ initialStats, initialLeads }: Props) {
   
   // Selected lead for detail panel
   const [selectedLead, setSelectedLead] = useState<CRMLead | null>(null)
+
+  // Selection state for bulk actions
+  const [selectedLeadIds, setSelectedLeadIds] = useState<Set<string>>(new Set())
+
+  // Confirm dialogs
+  const [removeFromCRMConfirm, setRemoveFromCRMConfirm] = useState<CRMLead | null>(null)
+  const [deleteCompletelyConfirm, setDeleteCompletelyConfirm] = useState<CRMLead | null>(null)
+  const [bulkRemoveConfirm, setBulkRemoveConfirm] = useState(false)
+  const [bulkStatusModal, setBulkStatusModal] = useState(false)
+  const [bulkPriorityModal, setBulkPriorityModal] = useState(false)
+  const [isSubmitting, setIsSubmitting] = useState(false)
+
+  // Call Queue
+  const [isQueueOpen, setIsQueueOpen] = useState(false)
+  const [isAddingToQueue, setIsAddingToQueue] = useState(false)
 
   // Filter leads
   const filteredLeads = useMemo(() => {
@@ -157,12 +186,11 @@ export default function NorCRMApp({ initialStats, initialLeads }: Props) {
   const handleLeadUpdate = (updatedLead: CRMLead) => {
     setLeads(prev => prev.map(l => l.id === updatedLead.id ? updatedLead : l))
     setSelectedLead(updatedLead)
+    refreshStats()
   }
 
   // Refresh stats
-  const refreshStats = async () => {
-    // In a real app, you'd refetch from the server
-    // For now, calculate from leads
+  const refreshStats = () => {
     const newStats = {
       total: leads.length,
       new: leads.filter(l => l.status === 'new').length,
@@ -175,17 +203,214 @@ export default function NorCRMApp({ initialStats, initialLeads }: Props) {
     setStats(newStats)
   }
 
+  // Selection handlers
+  const toggleLeadSelection = (leadId: string) => {
+    setSelectedLeadIds(prev => {
+      const newSet = new Set(prev)
+      if (newSet.has(leadId)) {
+        newSet.delete(leadId)
+      } else {
+        newSet.add(leadId)
+      }
+      return newSet
+    })
+  }
+
+  const selectAllVisible = () => {
+    const allIds = filteredLeads.map(l => l.id)
+    setSelectedLeadIds(new Set(allIds))
+  }
+
+  const clearSelection = () => {
+    setSelectedLeadIds(new Set())
+  }
+
+  // Remove from CRM (keep property in NorLead)
+  const handleRemoveFromCRM = async () => {
+    if (!removeFromCRMConfirm) return
+    setIsSubmitting(true)
+
+    const { error } = await supabase
+      .from('crm_leads')
+      .delete()
+      .eq('id', removeFromCRMConfirm.id)
+
+    setIsSubmitting(false)
+
+    if (error) {
+      showToast('Failed to remove from CRM: ' + error.message, 'error')
+      return
+    }
+
+    setLeads(prev => prev.filter(l => l.id !== removeFromCRMConfirm.id))
+    setSelectedLead(null)
+    showToast('Lead removed from CRM', 'success')
+    setRemoveFromCRMConfirm(null)
+    refreshStats()
+  }
+
+  // Delete completely (property + CRM lead)
+  const handleDeleteCompletely = async () => {
+    if (!deleteCompletelyConfirm) return
+    setIsSubmitting(true)
+
+    // Delete CRM lead first
+    await supabase.from('crm_leads').delete().eq('id', deleteCompletelyConfirm.id)
+
+    // Delete property
+    const { error } = await supabase
+      .from('properties')
+      .delete()
+      .eq('id', deleteCompletelyConfirm.property_id)
+
+    setIsSubmitting(false)
+
+    if (error) {
+      showToast('Failed to delete property: ' + error.message, 'error')
+      return
+    }
+
+    setLeads(prev => prev.filter(l => l.id !== deleteCompletelyConfirm.id))
+    setSelectedLead(null)
+    showToast('Property deleted completely', 'success')
+    setDeleteCompletelyConfirm(null)
+    refreshStats()
+  }
+
+  // Bulk remove from CRM
+  const handleBulkRemove = async () => {
+    if (selectedLeadIds.size === 0) return
+    setIsSubmitting(true)
+
+    const ids = Array.from(selectedLeadIds)
+
+    const { error } = await supabase
+      .from('crm_leads')
+      .delete()
+      .in('id', ids)
+
+    setIsSubmitting(false)
+
+    if (error) {
+      showToast('Failed to remove leads: ' + error.message, 'error')
+      return
+    }
+
+    setLeads(prev => prev.filter(l => !selectedLeadIds.has(l.id)))
+    clearSelection()
+    showToast(`${ids.length} leads removed from CRM`, 'success')
+    setBulkRemoveConfirm(false)
+    refreshStats()
+  }
+
+  // Bulk change status
+  const handleBulkStatusChange = async (newStatus: string) => {
+    if (selectedLeadIds.size === 0) return
+    setIsSubmitting(true)
+
+    const ids = Array.from(selectedLeadIds)
+
+    const { error } = await supabase
+      .from('crm_leads')
+      .update({ status: newStatus, updated_at: new Date().toISOString() })
+      .in('id', ids)
+
+    setIsSubmitting(false)
+
+    if (error) {
+      showToast('Failed to update status: ' + error.message, 'error')
+      return
+    }
+
+    setLeads(prev => prev.map(l => 
+      selectedLeadIds.has(l.id) ? { ...l, status: newStatus } : l
+    ))
+    clearSelection()
+    showToast(`${ids.length} leads updated to ${newStatus}`, 'success')
+    setBulkStatusModal(false)
+    refreshStats()
+  }
+
+  // Bulk change priority
+  const handleBulkPriorityChange = async (newPriority: string) => {
+    if (selectedLeadIds.size === 0) return
+    setIsSubmitting(true)
+
+    const ids = Array.from(selectedLeadIds)
+
+    const { error } = await supabase
+      .from('crm_leads')
+      .update({ priority: newPriority, updated_at: new Date().toISOString() })
+      .in('id', ids)
+
+    setIsSubmitting(false)
+
+    if (error) {
+      showToast('Failed to update priority: ' + error.message, 'error')
+      return
+    }
+
+    setLeads(prev => prev.map(l => 
+      selectedLeadIds.has(l.id) ? { ...l, priority: newPriority } : l
+    ))
+    clearSelection()
+    showToast(`${ids.length} leads updated to ${newPriority} priority`, 'success')
+    setBulkPriorityModal(false)
+  }
+
+  // Add to Call Queue
+  const handleAddToQueue = async (queueNumber: number = 1) => {
+    if (selectedLeadIds.size === 0) return
+    setIsAddingToQueue(true)
+
+    try {
+      const response = await fetch('/api/call-queue', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ 
+          leadIds: Array.from(selectedLeadIds),
+          queueNumber 
+        }),
+      })
+
+      const data = await response.json()
+
+      if (data.success) {
+        showToast(`Added to Q${queueNumber}: ${data.message}`, 'success')
+        setIsQueueOpen(true) // Open queue panel
+        clearSelection()
+      } else {
+        showToast(data.error || 'Failed to add to queue', 'error')
+      }
+    } catch (error) {
+      showToast('Failed to add to queue', 'error')
+    }
+
+    setIsAddingToQueue(false)
+  }
+
   return (
     <div className="min-h-screen">
       {/* Header */}
       <div className="mb-6">
-        <div className="flex items-center gap-3 mb-2">
-          <div className="w-3 h-3 rounded-full bg-norv" />
-          <h1 className="text-2xl font-bold text-white">NorCRM</h1>
+        <div className="flex items-center justify-between">
+          <div>
+            <div className="flex items-center gap-3 mb-2">
+              <div className="w-3 h-3 rounded-full bg-norv" />
+              <h1 className="text-2xl font-bold text-white">NorCRM</h1>
+            </div>
+            <p className="text-white/50">
+              Manage your {stats.total} active leads
+            </p>
+          </div>
+          <button
+            onClick={() => setIsQueueOpen(true)}
+            className="flex items-center gap-2 px-4 py-2 bg-green-600/20 hover:bg-green-600/30 text-green-400 rounded-lg transition"
+          >
+            <Phone size={18} />
+            <span>Call Queue</span>
+          </button>
         </div>
-        <p className="text-white/50">
-          Manage your {stats.total} active leads
-        </p>
       </div>
 
       {/* Stats Cards */}
@@ -308,6 +533,65 @@ export default function NorCRMApp({ initialStats, initialLeads }: Props) {
         </div>
       </div>
 
+      {/* Bulk Actions Bar */}
+      {selectedLeadIds.size > 0 && (
+        <div className="sticky top-0 z-20 bg-navy-900/95 backdrop-blur border border-norv/30 rounded-xl p-4 mb-6 shadow-lg shadow-norv/10">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-4">
+              <span className="text-white font-medium">{selectedLeadIds.size} selected</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <CallQueueButton
+                selectedCount={selectedLeadIds.size}
+                onAddToQueue={handleAddToQueue}
+                disabled={isAddingToQueue}
+              />
+              <button
+                onClick={() => setBulkStatusModal(true)}
+                className="px-4 py-2 rounded-lg bg-white/10 text-white hover:bg-white/20 transition-colors"
+              >
+                Change Status
+              </button>
+              <button
+                onClick={() => setBulkPriorityModal(true)}
+                className="px-4 py-2 rounded-lg bg-white/10 text-white hover:bg-white/20 transition-colors"
+              >
+                Change Priority
+              </button>
+              <button
+                onClick={() => setBulkRemoveConfirm(true)}
+                className="px-4 py-2 rounded-lg bg-red-500/20 text-red-400 hover:bg-red-500/30 transition-colors flex items-center gap-2"
+              >
+                <LogOut size={16} />
+                Remove from CRM
+              </button>
+              <button
+                onClick={clearSelection}
+                className="px-4 py-2 rounded-lg bg-white/5 text-white/70 hover:text-white transition-colors"
+              >
+                Clear
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Select All / Actions Row */}
+      <div className="flex items-center justify-between mb-4">
+        <div className="text-white/50">
+          Showing <span className="text-white font-medium">{filteredLeads.length}</span> leads
+        </div>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={selectAllVisible}
+            className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-white/5 text-white/60 hover:text-white border border-white/10 text-sm"
+          >
+            <CheckSquare size={14} />
+            Select All Visible
+          </button>
+        </div>
+      </div>
+
       {/* Lead List */}
       <div className="space-y-3">
         {filteredLeads.length === 0 ? (
@@ -326,7 +610,11 @@ export default function NorCRMApp({ initialStats, initialLeads }: Props) {
             <LeadCard 
               key={lead.id}
               lead={lead}
+              isSelected={selectedLeadIds.has(lead.id)}
+              onToggleSelect={() => toggleLeadSelection(lead.id)}
               onClick={() => setSelectedLead(lead)}
+              onRemoveFromCRM={() => setRemoveFromCRMConfirm(lead)}
+              onDeleteCompletely={() => setDeleteCompletelyConfirm(lead)}
               formatPrice={formatPrice}
               formatDate={formatDate}
               isOverdue={isOverdue}
@@ -342,8 +630,118 @@ export default function NorCRMApp({ initialStats, initialLeads }: Props) {
           lead={selectedLead}
           onClose={() => setSelectedLead(null)}
           onUpdate={handleLeadUpdate}
+          onRemoveFromCRM={() => setRemoveFromCRMConfirm(selectedLead)}
+          onDeleteCompletely={() => setDeleteCompletelyConfirm(selectedLead)}
         />
       )}
+
+      {/* Confirm Dialogs */}
+      <ConfirmDialog
+        isOpen={!!removeFromCRMConfirm}
+        onClose={() => setRemoveFromCRMConfirm(null)}
+        onConfirm={handleRemoveFromCRM}
+        title="Remove from CRM"
+        message={
+          <div>
+            <p>Remove <strong>{removeFromCRMConfirm?.property?.street_address}</strong> from CRM?</p>
+            <p className="mt-2 text-white/60">The property will still be available in NorLead.</p>
+          </div>
+        }
+        confirmLabel="Remove from CRM"
+        variant="warning"
+        isLoading={isSubmitting}
+      />
+
+      <ConfirmDialog
+        isOpen={!!deleteCompletelyConfirm}
+        onClose={() => setDeleteCompletelyConfirm(null)}
+        onConfirm={handleDeleteCompletely}
+        title="Delete Completely"
+        message={
+          <div>
+            <p>Delete <strong>{deleteCompletelyConfirm?.property?.street_address}</strong> completely?</p>
+            <p className="mt-2 text-red-400">This removes it from both NorLead and CRM. This cannot be undone.</p>
+          </div>
+        }
+        confirmLabel="Delete Completely"
+        variant="danger"
+        isLoading={isSubmitting}
+      />
+
+      <ConfirmDialog
+        isOpen={bulkRemoveConfirm}
+        onClose={() => setBulkRemoveConfirm(false)}
+        onConfirm={handleBulkRemove}
+        title="Remove from CRM"
+        message={`Remove ${selectedLeadIds.size} leads from CRM? Properties will still be available in NorLead.`}
+        confirmLabel={`Remove ${selectedLeadIds.size} Leads`}
+        variant="warning"
+        isLoading={isSubmitting}
+      />
+
+      {/* Bulk Status Modal */}
+      {bulkStatusModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center">
+          <div className="absolute inset-0 bg-black/70" onClick={() => setBulkStatusModal(false)} />
+          <div className="relative bg-navy-800 border border-white/20 rounded-2xl shadow-2xl w-full max-w-sm mx-4 p-6">
+            <h3 className="text-lg font-semibold text-white mb-4">Change Status</h3>
+            <p className="text-white/60 text-sm mb-4">Set status for {selectedLeadIds.size} selected leads</p>
+            <div className="space-y-2">
+              {Object.entries(statusColors).map(([value, { label, text }]) => (
+                <button
+                  key={value}
+                  onClick={() => handleBulkStatusChange(value)}
+                  disabled={isSubmitting}
+                  className={`w-full px-4 py-3 rounded-lg text-left hover:bg-white/10 transition-colors ${text}`}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+            <button
+              onClick={() => setBulkStatusModal(false)}
+              className="w-full mt-4 px-4 py-2 rounded-lg bg-white/10 text-white hover:bg-white/20 transition-colors"
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Bulk Priority Modal */}
+      {bulkPriorityModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center">
+          <div className="absolute inset-0 bg-black/70" onClick={() => setBulkPriorityModal(false)} />
+          <div className="relative bg-navy-800 border border-white/20 rounded-2xl shadow-2xl w-full max-w-sm mx-4 p-6">
+            <h3 className="text-lg font-semibold text-white mb-4">Change Priority</h3>
+            <p className="text-white/60 text-sm mb-4">Set priority for {selectedLeadIds.size} selected leads</p>
+            <div className="space-y-2">
+              {Object.entries(priorityColors).map(([value, { text }]) => (
+                <button
+                  key={value}
+                  onClick={() => handleBulkPriorityChange(value)}
+                  disabled={isSubmitting}
+                  className={`w-full px-4 py-3 rounded-lg text-left hover:bg-white/10 transition-colors ${text}`}
+                >
+                  {value === 'hot' ? '🔥 Hot' : value.charAt(0).toUpperCase() + value.slice(1)}
+                </button>
+              ))}
+            </div>
+            <button
+              onClick={() => setBulkPriorityModal(false)}
+              className="w-full mt-4 px-4 py-2 rounded-lg bg-white/10 text-white hover:bg-white/20 transition-colors"
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Call Queue Panel */}
+      <CallQueuePanel 
+        isOpen={isQueueOpen} 
+        onClose={() => setIsQueueOpen(false)} 
+      />
     </div>
   )
 }
@@ -393,14 +791,22 @@ function StatCard({
 // Lead Card Component
 function LeadCard({
   lead,
+  isSelected,
+  onToggleSelect,
   onClick,
+  onRemoveFromCRM,
+  onDeleteCompletely,
   formatPrice,
   formatDate,
   isOverdue,
   isToday
 }: {
   lead: CRMLead
+  isSelected: boolean
+  onToggleSelect: () => void
   onClick: () => void
+  onRemoveFromCRM: () => void
+  onDeleteCompletely: () => void
   formatPrice: (p: number | null) => string
   formatDate: (d: string | null) => string
   isOverdue: (d: string | null) => boolean
@@ -410,94 +816,142 @@ function LeadCard({
   const priority = priorityColors[lead.priority] || priorityColors.normal
 
   return (
-    <button
-      onClick={onClick}
-      className="w-full bg-navy-800 border border-white/10 rounded-xl p-4 text-left hover:border-white/20 transition-colors group"
+    <div
+      className={`bg-navy-800 border rounded-xl p-4 transition-colors group ${
+        isSelected ? 'border-norv/50 ring-1 ring-norv/30' : 'border-white/10 hover:border-white/20'
+      }`}
     >
-      <div className="flex items-center justify-between">
-        <div className="flex-1">
-          {/* Address */}
-          <div className="flex items-center gap-2 mb-2">
-            <MapPin size={16} className="text-norv flex-shrink-0" />
-            <span className="font-semibold text-white">
-              {lead.property?.street_address || 'Unknown Address'}
-            </span>
-            <span className="text-white/50">
-              {lead.property?.city}, {lead.property?.state}
-            </span>
-          </div>
+      <div className="flex items-center gap-4">
+        {/* Checkbox */}
+        <button
+          onClick={(e) => {
+            e.stopPropagation()
+            onToggleSelect()
+          }}
+          className={`w-5 h-5 rounded border flex items-center justify-center flex-shrink-0 transition-colors ${
+            isSelected 
+              ? 'bg-norv border-norv' 
+              : 'border-white/30 hover:border-white/50'
+          }`}
+        >
+          {isSelected && <CheckCircle size={14} className="text-white" />}
+        </button>
 
-          {/* Details Row */}
-          <div className="flex flex-wrap items-center gap-4 text-sm">
-            {/* Price */}
-            <div className="flex items-center gap-1 text-white/70">
-              <DollarSign size={14} />
-              <span>{formatPrice(lead.property?.price || null)}</span>
-            </div>
-
-            {/* Status Badge */}
-            <span className={`px-2 py-0.5 rounded text-xs font-medium ${status.bg} ${status.text}`}>
-              {status.label}
-            </span>
-
-            {/* Priority Badge */}
-            {lead.priority === 'hot' && (
-              <span className={`px-2 py-0.5 rounded text-xs font-medium flex items-center gap-1 ${priority.bg} ${priority.text}`}>
-                <Flame size={12} />
-                Hot
-              </span>
-            )}
-
-            {/* Callable Phones */}
-            {lead.callablePhones > 0 && (
-              <div className="flex items-center gap-1 text-emerald-400">
-                <Phone size={14} />
-                <span>{lead.callablePhones}</span>
-              </div>
-            )}
-
-            {/* Last Activity */}
-            {lead.last_activity_date && (
-              <div className="flex items-center gap-1 text-white/50">
-                <Clock size={14} />
-                <span>Last: {formatDate(lead.last_activity_date)}</span>
-              </div>
-            )}
-
-            {/* Next Action Date */}
-            {lead.next_action_date && (
-              <div className={`flex items-center gap-1 ${
-                isOverdue(lead.next_action_date) 
-                  ? 'text-red-400' 
-                  : isToday(lead.next_action_date)
-                  ? 'text-yellow-400'
-                  : 'text-white/50'
-              }`}>
-                {isOverdue(lead.next_action_date) && <AlertCircle size={14} />}
-                <Calendar size={14} />
-                <span>
-                  {isOverdue(lead.next_action_date) 
-                    ? 'Overdue' 
-                    : isToday(lead.next_action_date)
-                    ? 'Today'
-                    : formatDate(lead.next_action_date)
-                  }
+        {/* Main content - clickable */}
+        <button
+          onClick={onClick}
+          className="flex-1 text-left"
+        >
+          <div className="flex items-center justify-between">
+            <div className="flex-1">
+              {/* Address */}
+              <div className="flex items-center gap-2 mb-2">
+                <MapPin size={16} className="text-norv flex-shrink-0" />
+                <span className="font-semibold text-white">
+                  {lead.property?.street_address || 'Unknown Address'}
+                </span>
+                <span className="text-white/50">
+                  {lead.property?.city}, {lead.property?.state}
                 </span>
               </div>
-            )}
-          </div>
 
-          {/* Next Action */}
-          {lead.next_action && (
-            <div className="mt-2 text-sm text-white/50 truncate">
-              Next: {lead.next_action}
+              {/* Details Row */}
+              <div className="flex flex-wrap items-center gap-4 text-sm">
+                {/* Price */}
+                <div className="flex items-center gap-1 text-white/70">
+                  <DollarSign size={14} />
+                  <span>{formatPrice(lead.property?.price || null)}</span>
+                </div>
+
+                {/* Status Badge */}
+                <span className={`px-2 py-0.5 rounded text-xs font-medium ${status.bg} ${status.text}`}>
+                  {status.label}
+                </span>
+
+                {/* Priority Badge */}
+                {lead.priority === 'hot' && (
+                  <span className={`px-2 py-0.5 rounded text-xs font-medium flex items-center gap-1 ${priority.bg} ${priority.text}`}>
+                    <Flame size={12} />
+                    Hot
+                  </span>
+                )}
+
+                {/* Callable Phones */}
+                {lead.callablePhones > 0 && (
+                  <div className="flex items-center gap-1 text-emerald-400">
+                    <Phone size={14} />
+                    <span>{lead.callablePhones}</span>
+                  </div>
+                )}
+
+                {/* Last Activity */}
+                {lead.last_activity_date && (
+                  <div className="flex items-center gap-1 text-white/50">
+                    <Clock size={14} />
+                    <span>Last: {formatDate(lead.last_activity_date)}</span>
+                  </div>
+                )}
+
+                {/* Next Action Date */}
+                {lead.next_action_date && (
+                  <div className={`flex items-center gap-1 ${
+                    isOverdue(lead.next_action_date) 
+                      ? 'text-red-400' 
+                      : isToday(lead.next_action_date)
+                      ? 'text-yellow-400'
+                      : 'text-white/50'
+                  }`}>
+                    {isOverdue(lead.next_action_date) && <AlertCircle size={14} />}
+                    <Calendar size={14} />
+                    <span>
+                      {isOverdue(lead.next_action_date) 
+                        ? 'Overdue' 
+                        : isToday(lead.next_action_date)
+                        ? 'Today'
+                        : formatDate(lead.next_action_date)
+                      }
+                    </span>
+                  </div>
+                )}
+              </div>
+
+              {/* Next Action */}
+              {lead.next_action && (
+                <div className="mt-2 text-sm text-white/50 truncate">
+                  Next: {lead.next_action}
+                </div>
+              )}
             </div>
-          )}
-        </div>
 
-        {/* Arrow */}
-        <ChevronRight size={20} className="text-white/30 group-hover:text-white/60 transition-colors" />
+            {/* Arrow */}
+            <ChevronRight size={20} className="text-white/30 group-hover:text-white/60 transition-colors" />
+          </div>
+        </button>
+
+        {/* Quick Actions */}
+        <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+          <button
+            onClick={(e) => {
+              e.stopPropagation()
+              onRemoveFromCRM()
+            }}
+            className="p-2 rounded-lg hover:bg-white/10 text-white/50 hover:text-amber-400 transition-colors"
+            title="Remove from CRM"
+          >
+            <LogOut size={16} />
+          </button>
+          <button
+            onClick={(e) => {
+              e.stopPropagation()
+              onDeleteCompletely()
+            }}
+            className="p-2 rounded-lg hover:bg-red-500/20 text-white/50 hover:text-red-400 transition-colors"
+            title="Delete Completely"
+          >
+            <Trash2 size={16} />
+          </button>
+        </div>
       </div>
-    </button>
+    </div>
   )
 }

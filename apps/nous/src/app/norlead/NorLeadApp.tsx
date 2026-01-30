@@ -25,10 +25,14 @@ import {
   Filter,
   CheckSquare,
   Square,
-  Loader2
+  Loader2,
+  Trash2,
+  Ban
 } from 'lucide-react'
 import { PropertyCard } from './PropertyCard'
 import { FilterDropdown } from './FilterDropdown'
+import { Modal, ConfirmDialog } from '@/components/ui'
+import { useToast } from '@/components/ui/Toast'
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -144,8 +148,21 @@ const expiredDateOptions = [
   { label: '90+ Days', minDays: 90, maxDays: Infinity },
 ]
 
+// Status options for property
+const propertyStatusOptions = ['Expired', 'Pre-Foreclosure', 'FSBO', 'Absentee']
+
+// Role options for contacts
+const roleOptions = ['owner', 'co-owner', 'family', 'tenant', 'other']
+
+// Phone type options
+const phoneTypeOptions = ['cell', 'landline', 'voip', 'unknown']
+
 export default function NorLeadApp({ initialLeads, filterOptions, stats }: Props) {
   const router = useRouter()
+  const { showToast } = useToast()
+  
+  // Leads state (mutable for CRUD operations)
+  const [leads, setLeads] = useState<Property[]>(initialLeads)
   
   // Main section state
   const [activeSection, setActiveSection] = useState<'sellers' | 'buyers'>('sellers')
@@ -169,9 +186,53 @@ export default function NorLeadApp({ initialLeads, filterOptions, stats }: Props
   const [selectedEmails, setSelectedEmails] = useState<Set<string>>(new Set())
   const [expandedLeads, setExpandedLeads] = useState<Set<string>>(new Set())
 
+  // Modal states
+  const [editPropertyModal, setEditPropertyModal] = useState<Property | null>(null)
+  const [deletePropertyConfirm, setDeletePropertyConfirm] = useState<Property | null>(null)
+  const [addContactModal, setAddContactModal] = useState<Property | null>(null)
+  const [editContactModal, setEditContactModal] = useState<{ contact: Contact; propertyId: string } | null>(null)
+  const [deleteContactConfirm, setDeleteContactConfirm] = useState<{ contact: Contact; propertyId: string } | null>(null)
+  const [addPhoneModal, setAddPhoneModal] = useState<string | null>(null) // contactId
+  const [addEmailModal, setAddEmailModal] = useState<string | null>(null) // contactId
+  const [editPhoneModal, setEditPhoneModal] = useState<Phone | null>(null)
+  const [deletePhoneConfirm, setDeletePhoneConfirm] = useState<Phone | null>(null)
+  const [markDNCConfirm, setMarkDNCConfirm] = useState<Phone | null>(null)
+  const [editEmailModal, setEditEmailModal] = useState<Email | null>(null)
+  const [deleteEmailConfirm, setDeleteEmailConfirm] = useState<Email | null>(null)
+  const [bulkDeleteConfirm, setBulkDeleteConfirm] = useState(false)
+  const [bulkDNCConfirm, setBulkDNCConfirm] = useState(false)
+
+  // Form states
+  const [propertyForm, setPropertyForm] = useState({
+    street_address: '',
+    city: '',
+    state: '',
+    zip: '',
+    price: '',
+    beds: '',
+    baths: '',
+    sqft: '',
+    year_built: '',
+    status: ''
+  })
+  const [contactForm, setContactForm] = useState({
+    name: '',
+    role: '',
+    is_decision_maker: false
+  })
+  const [phoneForm, setPhoneForm] = useState({
+    number: '',
+    type: 'cell',
+    is_dnc: false
+  })
+  const [emailForm, setEmailForm] = useState({
+    email: ''
+  })
+  const [isSubmitting, setIsSubmitting] = useState(false)
+
   // Filter leads
   const filteredLeads = useMemo(() => {
-    return initialLeads.filter(lead => {
+    return leads.filter(lead => {
       // City filter
       if (selectedCities.length > 0 && !selectedCities.includes(lead.city)) {
         return false
@@ -225,7 +286,7 @@ export default function NorLeadApp({ initialLeads, filterOptions, stats }: Props
 
       return true
     })
-  }, [initialLeads, selectedCities, selectedZips, selectedPriceRange, selectedBeds, selectedStatuses, contactFilter])
+  }, [leads, selectedCities, selectedZips, selectedPriceRange, selectedBeds, selectedStatuses, contactFilter, selectedExpiredDate])
 
   // Count callable phones and emails in filtered leads
   const filteredStats = useMemo(() => {
@@ -248,6 +309,21 @@ export default function NorLeadApp({ initialLeads, filterOptions, stats }: Props
     return { phones, callablePhones, emails, contacts }
   }, [filteredLeads])
 
+  // Get selected property IDs (properties that have selected phones or emails)
+  const selectedPropertyIds = useMemo(() => {
+    const ids = new Set<string>()
+    leads.forEach(lead => {
+      lead.contacts?.forEach(contact => {
+        const hasSelectedPhone = contact.phones?.some(p => selectedPhones.has(p.id))
+        const hasSelectedEmail = contact.emails?.some(e => selectedEmails.has(e.id))
+        if (hasSelectedPhone || hasSelectedEmail) {
+          ids.add(lead.id)
+        }
+      })
+    })
+    return ids
+  }, [leads, selectedPhones, selectedEmails])
+
   // Toggle functions
   const toggleCity = (city: string) => {
     setSelectedCities(prev => 
@@ -267,13 +343,13 @@ export default function NorLeadApp({ initialLeads, filterOptions, stats }: Props
     )
   }
 
-  const toggleLead = (id: string) => {
+  const toggleLead = (leadId: string) => {
     setExpandedLeads(prev => {
       const newSet = new Set(prev)
-      if (newSet.has(id)) {
-        newSet.delete(id)
+      if (newSet.has(leadId)) {
+        newSet.delete(leadId)
       } else {
-        newSet.add(id)
+        newSet.add(leadId)
       }
       return newSet
     })
@@ -355,6 +431,10 @@ export default function NorLeadApp({ initialLeads, filterOptions, stats }: Props
     setContactFilter('all')
   }
 
+  const goToCRM = () => {
+    router.push('/norcrm')
+  }
+
   const activeFiltersCount = [
     selectedCities.length > 0,
     selectedZips.length > 0,
@@ -365,43 +445,59 @@ export default function NorLeadApp({ initialLeads, filterOptions, stats }: Props
     contactFilter !== 'all'
   ].filter(Boolean).length
 
+  // Transfer to CRM
   const handleTransferToCRM = async () => {
     setIsTransferring(true)
     setTransferResult(null)
 
     try {
-      // Get unique property IDs from selected phones and emails
       const propertyIds = new Set<string>()
       
-      initialLeads.forEach(lead => {
+      console.log('=== TRANSFER TO CRM DEBUG ===')
+      console.log('Selected phones:', Array.from(selectedPhones))
+      console.log('Selected emails:', Array.from(selectedEmails))
+      
+      leads.forEach(lead => {
         lead.contacts?.forEach(contact => {
-          // Check if any phone from this contact is selected
           const hasSelectedPhone = contact.phones?.some(p => selectedPhones.has(p.id))
-          // Check if any email from this contact is selected
           const hasSelectedEmail = contact.emails?.some(e => selectedEmails.has(e.id))
           
           if (hasSelectedPhone || hasSelectedEmail) {
+            console.log('Adding property:', lead.id, lead.street_address)
             propertyIds.add(lead.id)
           }
         })
       })
 
+      console.log('Property IDs to transfer:', Array.from(propertyIds))
+
       if (propertyIds.size === 0) {
-        alert('No properties selected')
+        showToast('No properties selected. Please select some phones or emails first.', 'warning')
         setIsTransferring(false)
         return
       }
 
       // Check which property IDs already exist in crm_leads
-      const { data: existingLeads } = await supabase
+      const { data: existingLeads, error: checkError } = await supabase
         .from('crm_leads')
         .select('property_id')
         .in('property_id', Array.from(propertyIds))
+
+      if (checkError) {
+        console.error('Error checking existing leads:', checkError)
+        showToast('Error checking existing leads', 'error')
+        setIsTransferring(false)
+        return
+      }
+
+      console.log('Existing leads in CRM:', existingLeads)
 
       const existingPropertyIds = new Set(existingLeads?.map(l => l.property_id) || [])
       
       // Filter to only new property IDs
       const newPropertyIds = Array.from(propertyIds).filter(id => !existingPropertyIds.has(id))
+
+      console.log('New property IDs to insert:', newPropertyIds)
 
       let successCount = 0
 
@@ -413,6 +509,8 @@ export default function NorLeadApp({ initialLeads, filterOptions, stats }: Props
           priority: 'normal' as const,
         }))
 
+        console.log('Inserting leads:', leadsToInsert)
+
         const { data, error } = await supabase
           .from('crm_leads')
           .insert(leadsToInsert)
@@ -420,32 +518,584 @@ export default function NorLeadApp({ initialLeads, filterOptions, stats }: Props
 
         if (error) {
           console.error('Error inserting leads:', error)
-          alert('Error transferring leads. Please try again.')
+          showToast('Error transferring leads: ' + error.message, 'error')
           setIsTransferring(false)
           return
         }
 
+        console.log('Insert result:', data)
         successCount = data?.length || 0
       }
+
+      console.log('Transfer complete - Success:', successCount, 'Existing:', existingPropertyIds.size)
 
       setTransferResult({
         success: successCount,
         existing: existingPropertyIds.size
       })
 
-      // Clear selections
       clearSelection()
+      showToast(successCount > 0 ? `${successCount} leads transferred to CRM` : 'All selected leads already in CRM', 'success')
 
     } catch (error) {
       console.error('Transfer error:', error)
-      alert('Error transferring leads. Please try again.')
+      showToast('Error transferring leads. Please try again.', 'error')
     }
 
     setIsTransferring(false)
   }
 
-  const goToCRM = () => {
-    router.push('/norcrm')
+  // ============ PROPERTY CRUD ============
+  
+  const openEditPropertyModal = (property: Property) => {
+    setPropertyForm({
+      street_address: property.street_address || '',
+      city: property.city || '',
+      state: property.state || '',
+      zip: property.zip || '',
+      price: property.price?.toString() || '',
+      beds: property.beds?.toString() || '',
+      baths: property.baths?.toString() || '',
+      sqft: property.sqft?.toString() || '',
+      year_built: property.year_built?.toString() || '',
+      status: property.status || ''
+    })
+    setEditPropertyModal(property)
+  }
+
+  const handleUpdateProperty = async () => {
+    if (!editPropertyModal) return
+    setIsSubmitting(true)
+
+    const { error } = await supabase
+      .from('properties')
+      .update({
+        street_address: propertyForm.street_address,
+        city: propertyForm.city,
+        state: propertyForm.state || null,
+        zip: propertyForm.zip || null,
+        price: propertyForm.price ? parseFloat(propertyForm.price) : null,
+        beds: propertyForm.beds ? parseInt(propertyForm.beds) : null,
+        baths: propertyForm.baths ? parseFloat(propertyForm.baths) : null,
+        sqft: propertyForm.sqft ? parseInt(propertyForm.sqft) : null,
+        year_built: propertyForm.year_built ? parseInt(propertyForm.year_built) : null,
+        status: propertyForm.status || null,
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', editPropertyModal.id)
+
+    setIsSubmitting(false)
+
+    if (error) {
+      showToast('Failed to update property: ' + error.message, 'error')
+      return
+    }
+
+    // Update local state
+    setLeads(prev => prev.map(l => 
+      l.id === editPropertyModal.id 
+        ? { 
+            ...l, 
+            street_address: propertyForm.street_address,
+            city: propertyForm.city,
+            state: propertyForm.state || null,
+            zip: propertyForm.zip || null,
+            price: propertyForm.price ? parseFloat(propertyForm.price) : null,
+            beds: propertyForm.beds ? parseInt(propertyForm.beds) : null,
+            baths: propertyForm.baths ? parseFloat(propertyForm.baths) : null,
+            sqft: propertyForm.sqft ? parseInt(propertyForm.sqft) : null,
+            year_built: propertyForm.year_built ? parseInt(propertyForm.year_built) : null,
+            status: propertyForm.status || null
+          }
+        : l
+    ))
+
+    showToast('Property updated', 'success')
+    setEditPropertyModal(null)
+  }
+
+  const handleDeleteProperty = async () => {
+    if (!deletePropertyConfirm) return
+    setIsSubmitting(true)
+
+    // Check if in CRM
+    const { data: crmLead } = await supabase
+      .from('crm_leads')
+      .select('id')
+      .eq('property_id', deletePropertyConfirm.id)
+      .single()
+
+    if (crmLead) {
+      // Delete from CRM first
+      await supabase.from('crm_leads').delete().eq('property_id', deletePropertyConfirm.id)
+    }
+
+    const { error } = await supabase
+      .from('properties')
+      .delete()
+      .eq('id', deletePropertyConfirm.id)
+
+    setIsSubmitting(false)
+
+    if (error) {
+      showToast('Failed to delete property: ' + error.message, 'error')
+      return
+    }
+
+    // Update local state
+    setLeads(prev => prev.filter(l => l.id !== deletePropertyConfirm.id))
+    showToast('Property deleted', 'success')
+    setDeletePropertyConfirm(null)
+  }
+
+  // ============ CONTACT CRUD ============
+
+  const openAddContactModal = (property: Property) => {
+    setContactForm({ name: '', role: '', is_decision_maker: false })
+    setAddContactModal(property)
+  }
+
+  const handleAddContact = async () => {
+    if (!addContactModal || !contactForm.name.trim()) return
+    setIsSubmitting(true)
+
+    const { data, error } = await supabase
+      .from('contacts')
+      .insert({
+        property_id: addContactModal.id,
+        name: contactForm.name,
+        role: contactForm.role || null,
+        is_decision_maker: contactForm.is_decision_maker
+      })
+      .select()
+      .single()
+
+    setIsSubmitting(false)
+
+    if (error) {
+      showToast('Failed to add contact: ' + error.message, 'error')
+      return
+    }
+
+    // Update local state
+    setLeads(prev => prev.map(l => 
+      l.id === addContactModal.id 
+        ? { ...l, contacts: [...(l.contacts || []), { ...data, phones: [], emails: [] }] }
+        : l
+    ))
+
+    showToast('Contact added', 'success')
+    setAddContactModal(null)
+  }
+
+  const openEditContactModal = (contact: Contact, propertyId: string) => {
+    setContactForm({
+      name: contact.name,
+      role: contact.role || '',
+      is_decision_maker: contact.is_decision_maker || false
+    })
+    setEditContactModal({ contact, propertyId })
+  }
+
+  const handleUpdateContact = async () => {
+    if (!editContactModal) return
+    setIsSubmitting(true)
+
+    const { error } = await supabase
+      .from('contacts')
+      .update({
+        name: contactForm.name,
+        role: contactForm.role || null,
+        is_decision_maker: contactForm.is_decision_maker
+      })
+      .eq('id', editContactModal.contact.id)
+
+    setIsSubmitting(false)
+
+    if (error) {
+      showToast('Failed to update contact: ' + error.message, 'error')
+      return
+    }
+
+    // Update local state
+    setLeads(prev => prev.map(l => 
+      l.id === editContactModal.propertyId 
+        ? { 
+            ...l, 
+            contacts: l.contacts?.map(c => 
+              c.id === editContactModal.contact.id 
+                ? { ...c, name: contactForm.name, role: contactForm.role || null, is_decision_maker: contactForm.is_decision_maker }
+                : c
+            )
+          }
+        : l
+    ))
+
+    showToast('Contact updated', 'success')
+    setEditContactModal(null)
+  }
+
+  const handleDeleteContact = async () => {
+    if (!deleteContactConfirm) return
+    setIsSubmitting(true)
+
+    const { error } = await supabase
+      .from('contacts')
+      .delete()
+      .eq('id', deleteContactConfirm.contact.id)
+
+    setIsSubmitting(false)
+
+    if (error) {
+      showToast('Failed to delete contact: ' + error.message, 'error')
+      return
+    }
+
+    // Update local state
+    setLeads(prev => prev.map(l => 
+      l.id === deleteContactConfirm.propertyId 
+        ? { ...l, contacts: l.contacts?.filter(c => c.id !== deleteContactConfirm.contact.id) }
+        : l
+    ))
+
+    showToast('Contact deleted', 'success')
+    setDeleteContactConfirm(null)
+  }
+
+  // ============ PHONE CRUD ============
+
+  const openAddPhoneModal = (contactId: string) => {
+    setPhoneForm({ number: '', type: 'cell', is_dnc: false })
+    setAddPhoneModal(contactId)
+  }
+
+  const handleAddPhone = async () => {
+    if (!addPhoneModal || !phoneForm.number.trim()) return
+    setIsSubmitting(true)
+
+    const { data, error } = await supabase
+      .from('phones')
+      .insert({
+        contact_id: addPhoneModal,
+        number: phoneForm.number,
+        type: phoneForm.type,
+        is_dnc: phoneForm.is_dnc
+      })
+      .select()
+      .single()
+
+    setIsSubmitting(false)
+
+    if (error) {
+      showToast('Failed to add phone: ' + error.message, 'error')
+      return
+    }
+
+    // Update local state
+    setLeads(prev => prev.map(l => ({
+      ...l,
+      contacts: l.contacts?.map(c => 
+        c.id === addPhoneModal 
+          ? { ...c, phones: [...(c.phones || []), data] }
+          : c
+      )
+    })))
+
+    showToast('Phone added', 'success')
+    setAddPhoneModal(null)
+  }
+
+  const openEditPhoneModal = (phone: Phone) => {
+    setPhoneForm({
+      number: phone.number,
+      type: phone.type || 'cell',
+      is_dnc: phone.is_dnc || false
+    })
+    setEditPhoneModal(phone)
+  }
+
+  const handleUpdatePhone = async () => {
+    if (!editPhoneModal) return
+    setIsSubmitting(true)
+
+    const { error } = await supabase
+      .from('phones')
+      .update({
+        number: phoneForm.number,
+        type: phoneForm.type,
+        is_dnc: phoneForm.is_dnc
+      })
+      .eq('id', editPhoneModal.id)
+
+    setIsSubmitting(false)
+
+    if (error) {
+      showToast('Failed to update phone: ' + error.message, 'error')
+      return
+    }
+
+    // Update local state
+    setLeads(prev => prev.map(l => ({
+      ...l,
+      contacts: l.contacts?.map(c => ({
+        ...c,
+        phones: c.phones?.map(p => 
+          p.id === editPhoneModal.id 
+            ? { ...p, number: phoneForm.number, type: phoneForm.type, is_dnc: phoneForm.is_dnc }
+            : p
+        )
+      }))
+    })))
+
+    showToast('Phone updated', 'success')
+    setEditPhoneModal(null)
+  }
+
+  const handleDeletePhone = async () => {
+    if (!deletePhoneConfirm) return
+    setIsSubmitting(true)
+
+    const { error } = await supabase
+      .from('phones')
+      .delete()
+      .eq('id', deletePhoneConfirm.id)
+
+    setIsSubmitting(false)
+
+    if (error) {
+      showToast('Failed to delete phone: ' + error.message, 'error')
+      return
+    }
+
+    // Update local state and remove from selection
+    setLeads(prev => prev.map(l => ({
+      ...l,
+      contacts: l.contacts?.map(c => ({
+        ...c,
+        phones: c.phones?.filter(p => p.id !== deletePhoneConfirm.id)
+      }))
+    })))
+    setSelectedPhones(prev => {
+      const newSet = new Set(prev)
+      newSet.delete(deletePhoneConfirm.id)
+      return newSet
+    })
+
+    showToast('Phone deleted', 'success')
+    setDeletePhoneConfirm(null)
+  }
+
+  const handleMarkDNC = async () => {
+    if (!markDNCConfirm) return
+    setIsSubmitting(true)
+
+    const { error } = await supabase
+      .from('phones')
+      .update({ is_dnc: true })
+      .eq('id', markDNCConfirm.id)
+
+    setIsSubmitting(false)
+
+    if (error) {
+      showToast('Failed to mark as DNC: ' + error.message, 'error')
+      return
+    }
+
+    // Update local state and remove from selection
+    setLeads(prev => prev.map(l => ({
+      ...l,
+      contacts: l.contacts?.map(c => ({
+        ...c,
+        phones: c.phones?.map(p => 
+          p.id === markDNCConfirm.id ? { ...p, is_dnc: true } : p
+        )
+      }))
+    })))
+    setSelectedPhones(prev => {
+      const newSet = new Set(prev)
+      newSet.delete(markDNCConfirm.id)
+      return newSet
+    })
+
+    showToast('Phone marked as DNC', 'success')
+    setMarkDNCConfirm(null)
+  }
+
+  // ============ EMAIL CRUD ============
+
+  const openAddEmailModal = (contactId: string) => {
+    setEmailForm({ email: '' })
+    setAddEmailModal(contactId)
+  }
+
+  const handleAddEmail = async () => {
+    if (!addEmailModal || !emailForm.email.trim()) return
+    setIsSubmitting(true)
+
+    const { data, error } = await supabase
+      .from('emails')
+      .insert({
+        contact_id: addEmailModal,
+        email: emailForm.email
+      })
+      .select()
+      .single()
+
+    setIsSubmitting(false)
+
+    if (error) {
+      showToast('Failed to add email: ' + error.message, 'error')
+      return
+    }
+
+    // Update local state
+    setLeads(prev => prev.map(l => ({
+      ...l,
+      contacts: l.contacts?.map(c => 
+        c.id === addEmailModal 
+          ? { ...c, emails: [...(c.emails || []), data] }
+          : c
+      )
+    })))
+
+    showToast('Email added', 'success')
+    setAddEmailModal(null)
+  }
+
+  const openEditEmailModal = (email: Email) => {
+    setEmailForm({ email: email.email })
+    setEditEmailModal(email)
+  }
+
+  const handleUpdateEmail = async () => {
+    if (!editEmailModal) return
+    setIsSubmitting(true)
+
+    const { error } = await supabase
+      .from('emails')
+      .update({ email: emailForm.email })
+      .eq('id', editEmailModal.id)
+
+    setIsSubmitting(false)
+
+    if (error) {
+      showToast('Failed to update email: ' + error.message, 'error')
+      return
+    }
+
+    // Update local state
+    setLeads(prev => prev.map(l => ({
+      ...l,
+      contacts: l.contacts?.map(c => ({
+        ...c,
+        emails: c.emails?.map(e => 
+          e.id === editEmailModal.id ? { ...e, email: emailForm.email } : e
+        )
+      }))
+    })))
+
+    showToast('Email updated', 'success')
+    setEditEmailModal(null)
+  }
+
+  const handleDeleteEmail = async () => {
+    if (!deleteEmailConfirm) return
+    setIsSubmitting(true)
+
+    const { error } = await supabase
+      .from('emails')
+      .delete()
+      .eq('id', deleteEmailConfirm.id)
+
+    setIsSubmitting(false)
+
+    if (error) {
+      showToast('Failed to delete email: ' + error.message, 'error')
+      return
+    }
+
+    // Update local state and remove from selection
+    setLeads(prev => prev.map(l => ({
+      ...l,
+      contacts: l.contacts?.map(c => ({
+        ...c,
+        emails: c.emails?.filter(e => e.id !== deleteEmailConfirm.id)
+      }))
+    })))
+    setSelectedEmails(prev => {
+      const newSet = new Set(prev)
+      newSet.delete(deleteEmailConfirm.id)
+      return newSet
+    })
+
+    showToast('Email deleted', 'success')
+    setDeleteEmailConfirm(null)
+  }
+
+  // ============ BULK ACTIONS ============
+
+  const handleBulkDelete = async () => {
+    if (selectedPropertyIds.size === 0) return
+    setIsSubmitting(true)
+
+    const ids = Array.from(selectedPropertyIds)
+
+    // Delete from CRM first
+    await supabase.from('crm_leads').delete().in('property_id', ids)
+
+    // Delete properties
+    const { error } = await supabase
+      .from('properties')
+      .delete()
+      .in('id', ids)
+
+    setIsSubmitting(false)
+
+    if (error) {
+      showToast('Failed to delete properties: ' + error.message, 'error')
+      return
+    }
+
+    // Update local state
+    setLeads(prev => prev.filter(l => !selectedPropertyIds.has(l.id)))
+    clearSelection()
+
+    showToast(`${ids.length} properties deleted`, 'success')
+    setBulkDeleteConfirm(false)
+  }
+
+  const handleBulkMarkDNC = async () => {
+    if (selectedPhones.size === 0) return
+    setIsSubmitting(true)
+
+    const phoneIds = Array.from(selectedPhones)
+
+    const { error } = await supabase
+      .from('phones')
+      .update({ is_dnc: true })
+      .in('id', phoneIds)
+
+    setIsSubmitting(false)
+
+    if (error) {
+      showToast('Failed to mark as DNC: ' + error.message, 'error')
+      return
+    }
+
+    // Update local state
+    setLeads(prev => prev.map(l => ({
+      ...l,
+      contacts: l.contacts?.map(c => ({
+        ...c,
+        phones: c.phones?.map(p => 
+          selectedPhones.has(p.id) ? { ...p, is_dnc: true } : p
+        )
+      }))
+    })))
+    setSelectedPhones(new Set())
+
+    showToast(`${phoneIds.length} phones marked as DNC`, 'success')
+    setBulkDNCConfirm(false)
   }
 
   return (
@@ -756,8 +1406,28 @@ export default function NorLeadApp({ initialLeads, filterOptions, stats }: Props
                       <span className="text-white font-medium">{selectedEmails.size}</span>
                       <span className="text-white/50">emails</span>
                     </div>
+                    <div className="text-white/30">|</div>
+                    <div className="text-white/50">
+                      <span className="text-white font-medium">{selectedPropertyIds.size}</span> properties
+                    </div>
                   </div>
                   <div className="flex items-center gap-2">
+                    {selectedPhones.size > 0 && (
+                      <button
+                        onClick={() => setBulkDNCConfirm(true)}
+                        className="px-4 py-2 rounded-lg bg-red-500/20 text-red-400 hover:bg-red-500/30 transition-colors flex items-center gap-2"
+                      >
+                        <Ban size={16} />
+                        Mark DNC
+                      </button>
+                    )}
+                    <button
+                      onClick={() => setBulkDeleteConfirm(true)}
+                      className="px-4 py-2 rounded-lg bg-red-500/20 text-red-400 hover:bg-red-500/30 transition-colors flex items-center gap-2"
+                    >
+                      <Trash2 size={16} />
+                      Delete
+                    </button>
                     <button
                       onClick={clearSelection}
                       className="px-4 py-2 rounded-lg bg-white/5 text-white/70 hover:text-white transition-colors"
@@ -828,6 +1498,18 @@ export default function NorLeadApp({ initialLeads, filterOptions, stats }: Props
                   onToggleEmail={toggleEmail}
                   onSelectAllPhones={() => selectAllPhonesInLead(lead)}
                   onSelectAllEmails={() => selectAllEmailsInLead(lead)}
+                  onEditProperty={openEditPropertyModal}
+                  onDeleteProperty={setDeletePropertyConfirm}
+                  onAddContact={openAddContactModal}
+                  onEditContact={openEditContactModal}
+                  onDeleteContact={(contact, propertyId) => setDeleteContactConfirm({ contact, propertyId })}
+                  onAddPhone={openAddPhoneModal}
+                  onAddEmail={openAddEmailModal}
+                  onEditPhone={openEditPhoneModal}
+                  onDeletePhone={setDeletePhoneConfirm}
+                  onMarkDNC={setMarkDNCConfirm}
+                  onEditEmail={openEditEmailModal}
+                  onDeleteEmail={setDeleteEmailConfirm}
                 />
               ))
             )}
@@ -845,6 +1527,537 @@ export default function NorLeadApp({ initialLeads, filterOptions, stats }: Props
           </p>
         </div>
       )}
+
+      {/* ============ MODALS ============ */}
+
+      {/* Edit Property Modal */}
+      <Modal
+        isOpen={!!editPropertyModal}
+        onClose={() => setEditPropertyModal(null)}
+        title="Edit Property"
+        size="lg"
+      >
+        <div className="p-6 space-y-4">
+          <div className="grid grid-cols-2 gap-4">
+            <div className="col-span-2">
+              <label className="block text-sm text-white/60 mb-1">Street Address</label>
+              <input
+                type="text"
+                value={propertyForm.street_address}
+                onChange={(e) => setPropertyForm(prev => ({ ...prev, street_address: e.target.value }))}
+                className="w-full bg-navy-900 border border-white/10 rounded-lg px-4 py-2 text-white focus:outline-none focus:border-norv/50"
+              />
+            </div>
+            <div>
+              <label className="block text-sm text-white/60 mb-1">City</label>
+              <input
+                type="text"
+                value={propertyForm.city}
+                onChange={(e) => setPropertyForm(prev => ({ ...prev, city: e.target.value }))}
+                className="w-full bg-navy-900 border border-white/10 rounded-lg px-4 py-2 text-white focus:outline-none focus:border-norv/50"
+              />
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm text-white/60 mb-1">State</label>
+                <input
+                  type="text"
+                  value={propertyForm.state}
+                  onChange={(e) => setPropertyForm(prev => ({ ...prev, state: e.target.value }))}
+                  className="w-full bg-navy-900 border border-white/10 rounded-lg px-4 py-2 text-white focus:outline-none focus:border-norv/50"
+                />
+              </div>
+              <div>
+                <label className="block text-sm text-white/60 mb-1">Zip</label>
+                <input
+                  type="text"
+                  value={propertyForm.zip}
+                  onChange={(e) => setPropertyForm(prev => ({ ...prev, zip: e.target.value }))}
+                  className="w-full bg-navy-900 border border-white/10 rounded-lg px-4 py-2 text-white focus:outline-none focus:border-norv/50"
+                />
+              </div>
+            </div>
+            <div>
+              <label className="block text-sm text-white/60 mb-1">Price</label>
+              <input
+                type="number"
+                value={propertyForm.price}
+                onChange={(e) => setPropertyForm(prev => ({ ...prev, price: e.target.value }))}
+                className="w-full bg-navy-900 border border-white/10 rounded-lg px-4 py-2 text-white focus:outline-none focus:border-norv/50"
+              />
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm text-white/60 mb-1">Beds</label>
+                <input
+                  type="number"
+                  value={propertyForm.beds}
+                  onChange={(e) => setPropertyForm(prev => ({ ...prev, beds: e.target.value }))}
+                  className="w-full bg-navy-900 border border-white/10 rounded-lg px-4 py-2 text-white focus:outline-none focus:border-norv/50"
+                />
+              </div>
+              <div>
+                <label className="block text-sm text-white/60 mb-1">Baths</label>
+                <input
+                  type="number"
+                  step="0.5"
+                  value={propertyForm.baths}
+                  onChange={(e) => setPropertyForm(prev => ({ ...prev, baths: e.target.value }))}
+                  className="w-full bg-navy-900 border border-white/10 rounded-lg px-4 py-2 text-white focus:outline-none focus:border-norv/50"
+                />
+              </div>
+            </div>
+            <div>
+              <label className="block text-sm text-white/60 mb-1">Sqft</label>
+              <input
+                type="number"
+                value={propertyForm.sqft}
+                onChange={(e) => setPropertyForm(prev => ({ ...prev, sqft: e.target.value }))}
+                className="w-full bg-navy-900 border border-white/10 rounded-lg px-4 py-2 text-white focus:outline-none focus:border-norv/50"
+              />
+            </div>
+            <div>
+              <label className="block text-sm text-white/60 mb-1">Year Built</label>
+              <input
+                type="number"
+                value={propertyForm.year_built}
+                onChange={(e) => setPropertyForm(prev => ({ ...prev, year_built: e.target.value }))}
+                className="w-full bg-navy-900 border border-white/10 rounded-lg px-4 py-2 text-white focus:outline-none focus:border-norv/50"
+              />
+            </div>
+            <div>
+              <label className="block text-sm text-white/60 mb-1">Status</label>
+              <select
+                value={propertyForm.status}
+                onChange={(e) => setPropertyForm(prev => ({ ...prev, status: e.target.value }))}
+                className="w-full bg-navy-900 border border-white/10 rounded-lg px-4 py-2 text-white focus:outline-none focus:border-norv/50"
+              >
+                <option value="">Select status...</option>
+                {propertyStatusOptions.map(s => (
+                  <option key={s} value={s}>{s}</option>
+                ))}
+              </select>
+            </div>
+          </div>
+          <div className="flex justify-end gap-3 pt-4 border-t border-white/10">
+            <button
+              onClick={() => setEditPropertyModal(null)}
+              className="px-4 py-2 rounded-lg bg-white/10 text-white hover:bg-white/20 transition-colors"
+            >
+              Cancel
+            </button>
+            <button
+              onClick={handleUpdateProperty}
+              disabled={isSubmitting}
+              className="px-4 py-2 rounded-lg bg-norv text-white font-medium hover:bg-norv/80 disabled:opacity-50 transition-colors flex items-center gap-2"
+            >
+              {isSubmitting && <Loader2 size={16} className="animate-spin" />}
+              Save Changes
+            </button>
+          </div>
+        </div>
+      </Modal>
+
+      {/* Add Contact Modal */}
+      <Modal
+        isOpen={!!addContactModal}
+        onClose={() => setAddContactModal(null)}
+        title="Add Contact"
+        size="sm"
+      >
+        <div className="p-6 space-y-4">
+          <div>
+            <label className="block text-sm text-white/60 mb-1">Name *</label>
+            <input
+              type="text"
+              value={contactForm.name}
+              onChange={(e) => setContactForm(prev => ({ ...prev, name: e.target.value }))}
+              placeholder="Contact name"
+              className="w-full bg-navy-900 border border-white/10 rounded-lg px-4 py-2 text-white focus:outline-none focus:border-norv/50"
+            />
+          </div>
+          <div>
+            <label className="block text-sm text-white/60 mb-1">Role</label>
+            <select
+              value={contactForm.role}
+              onChange={(e) => setContactForm(prev => ({ ...prev, role: e.target.value }))}
+              className="w-full bg-navy-900 border border-white/10 rounded-lg px-4 py-2 text-white focus:outline-none focus:border-norv/50"
+            >
+              <option value="">Select role...</option>
+              {roleOptions.map(r => (
+                <option key={r} value={r}>{r}</option>
+              ))}
+            </select>
+          </div>
+          <label className="flex items-center gap-2 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={contactForm.is_decision_maker}
+              onChange={(e) => setContactForm(prev => ({ ...prev, is_decision_maker: e.target.checked }))}
+              className="w-4 h-4 rounded border-white/20 bg-navy-900 text-norv focus:ring-norv/50"
+            />
+            <span className="text-sm text-white/70">Decision Maker</span>
+          </label>
+          <div className="flex justify-end gap-3 pt-4 border-t border-white/10">
+            <button
+              onClick={() => setAddContactModal(null)}
+              className="px-4 py-2 rounded-lg bg-white/10 text-white hover:bg-white/20 transition-colors"
+            >
+              Cancel
+            </button>
+            <button
+              onClick={handleAddContact}
+              disabled={isSubmitting || !contactForm.name.trim()}
+              className="px-4 py-2 rounded-lg bg-norv text-white font-medium hover:bg-norv/80 disabled:opacity-50 transition-colors flex items-center gap-2"
+            >
+              {isSubmitting && <Loader2 size={16} className="animate-spin" />}
+              Add Contact
+            </button>
+          </div>
+        </div>
+      </Modal>
+
+      {/* Edit Contact Modal */}
+      <Modal
+        isOpen={!!editContactModal}
+        onClose={() => setEditContactModal(null)}
+        title="Edit Contact"
+        size="sm"
+      >
+        <div className="p-6 space-y-4">
+          <div>
+            <label className="block text-sm text-white/60 mb-1">Name</label>
+            <input
+              type="text"
+              value={contactForm.name}
+              onChange={(e) => setContactForm(prev => ({ ...prev, name: e.target.value }))}
+              className="w-full bg-navy-900 border border-white/10 rounded-lg px-4 py-2 text-white focus:outline-none focus:border-norv/50"
+            />
+          </div>
+          <div>
+            <label className="block text-sm text-white/60 mb-1">Role</label>
+            <select
+              value={contactForm.role}
+              onChange={(e) => setContactForm(prev => ({ ...prev, role: e.target.value }))}
+              className="w-full bg-navy-900 border border-white/10 rounded-lg px-4 py-2 text-white focus:outline-none focus:border-norv/50"
+            >
+              <option value="">Select role...</option>
+              {roleOptions.map(r => (
+                <option key={r} value={r}>{r}</option>
+              ))}
+            </select>
+          </div>
+          <label className="flex items-center gap-2 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={contactForm.is_decision_maker}
+              onChange={(e) => setContactForm(prev => ({ ...prev, is_decision_maker: e.target.checked }))}
+              className="w-4 h-4 rounded border-white/20 bg-navy-900 text-norv focus:ring-norv/50"
+            />
+            <span className="text-sm text-white/70">Decision Maker</span>
+          </label>
+          <div className="flex justify-end gap-3 pt-4 border-t border-white/10">
+            <button
+              onClick={() => setEditContactModal(null)}
+              className="px-4 py-2 rounded-lg bg-white/10 text-white hover:bg-white/20 transition-colors"
+            >
+              Cancel
+            </button>
+            <button
+              onClick={handleUpdateContact}
+              disabled={isSubmitting}
+              className="px-4 py-2 rounded-lg bg-norv text-white font-medium hover:bg-norv/80 disabled:opacity-50 transition-colors flex items-center gap-2"
+            >
+              {isSubmitting && <Loader2 size={16} className="animate-spin" />}
+              Save Changes
+            </button>
+          </div>
+        </div>
+      </Modal>
+
+      {/* Add Phone Modal */}
+      <Modal
+        isOpen={!!addPhoneModal}
+        onClose={() => setAddPhoneModal(null)}
+        title="Add Phone"
+        size="sm"
+      >
+        <div className="p-6 space-y-4">
+          <div>
+            <label className="block text-sm text-white/60 mb-1">Phone Number *</label>
+            <input
+              type="tel"
+              value={phoneForm.number}
+              onChange={(e) => setPhoneForm(prev => ({ ...prev, number: e.target.value }))}
+              placeholder="(555) 123-4567"
+              className="w-full bg-navy-900 border border-white/10 rounded-lg px-4 py-2 text-white focus:outline-none focus:border-norv/50"
+            />
+          </div>
+          <div>
+            <label className="block text-sm text-white/60 mb-1">Type</label>
+            <select
+              value={phoneForm.type}
+              onChange={(e) => setPhoneForm(prev => ({ ...prev, type: e.target.value }))}
+              className="w-full bg-navy-900 border border-white/10 rounded-lg px-4 py-2 text-white focus:outline-none focus:border-norv/50"
+            >
+              {phoneTypeOptions.map(t => (
+                <option key={t} value={t}>{t}</option>
+              ))}
+            </select>
+          </div>
+          <label className="flex items-center gap-2 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={phoneForm.is_dnc}
+              onChange={(e) => setPhoneForm(prev => ({ ...prev, is_dnc: e.target.checked }))}
+              className="w-4 h-4 rounded border-white/20 bg-navy-900 text-red-500 focus:ring-red-500/50"
+            />
+            <span className="text-sm text-white/70">Do Not Call (DNC)</span>
+          </label>
+          <div className="flex justify-end gap-3 pt-4 border-t border-white/10">
+            <button
+              onClick={() => setAddPhoneModal(null)}
+              className="px-4 py-2 rounded-lg bg-white/10 text-white hover:bg-white/20 transition-colors"
+            >
+              Cancel
+            </button>
+            <button
+              onClick={handleAddPhone}
+              disabled={isSubmitting || !phoneForm.number.trim()}
+              className="px-4 py-2 rounded-lg bg-norv text-white font-medium hover:bg-norv/80 disabled:opacity-50 transition-colors flex items-center gap-2"
+            >
+              {isSubmitting && <Loader2 size={16} className="animate-spin" />}
+              Add Phone
+            </button>
+          </div>
+        </div>
+      </Modal>
+
+      {/* Edit Phone Modal */}
+      <Modal
+        isOpen={!!editPhoneModal}
+        onClose={() => setEditPhoneModal(null)}
+        title="Edit Phone"
+        size="sm"
+      >
+        <div className="p-6 space-y-4">
+          <div>
+            <label className="block text-sm text-white/60 mb-1">Phone Number</label>
+            <input
+              type="tel"
+              value={phoneForm.number}
+              onChange={(e) => setPhoneForm(prev => ({ ...prev, number: e.target.value }))}
+              className="w-full bg-navy-900 border border-white/10 rounded-lg px-4 py-2 text-white focus:outline-none focus:border-norv/50"
+            />
+          </div>
+          <div>
+            <label className="block text-sm text-white/60 mb-1">Type</label>
+            <select
+              value={phoneForm.type}
+              onChange={(e) => setPhoneForm(prev => ({ ...prev, type: e.target.value }))}
+              className="w-full bg-navy-900 border border-white/10 rounded-lg px-4 py-2 text-white focus:outline-none focus:border-norv/50"
+            >
+              {phoneTypeOptions.map(t => (
+                <option key={t} value={t}>{t}</option>
+              ))}
+            </select>
+          </div>
+          <label className="flex items-center gap-2 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={phoneForm.is_dnc}
+              onChange={(e) => setPhoneForm(prev => ({ ...prev, is_dnc: e.target.checked }))}
+              className="w-4 h-4 rounded border-white/20 bg-navy-900 text-red-500 focus:ring-red-500/50"
+            />
+            <span className="text-sm text-white/70">Do Not Call (DNC)</span>
+          </label>
+          <div className="flex justify-end gap-3 pt-4 border-t border-white/10">
+            <button
+              onClick={() => setEditPhoneModal(null)}
+              className="px-4 py-2 rounded-lg bg-white/10 text-white hover:bg-white/20 transition-colors"
+            >
+              Cancel
+            </button>
+            <button
+              onClick={handleUpdatePhone}
+              disabled={isSubmitting}
+              className="px-4 py-2 rounded-lg bg-norv text-white font-medium hover:bg-norv/80 disabled:opacity-50 transition-colors flex items-center gap-2"
+            >
+              {isSubmitting && <Loader2 size={16} className="animate-spin" />}
+              Save Changes
+            </button>
+          </div>
+        </div>
+      </Modal>
+
+      {/* Add Email Modal */}
+      <Modal
+        isOpen={!!addEmailModal}
+        onClose={() => setAddEmailModal(null)}
+        title="Add Email"
+        size="sm"
+      >
+        <div className="p-6 space-y-4">
+          <div>
+            <label className="block text-sm text-white/60 mb-1">Email Address *</label>
+            <input
+              type="email"
+              value={emailForm.email}
+              onChange={(e) => setEmailForm(prev => ({ ...prev, email: e.target.value }))}
+              placeholder="email@example.com"
+              className="w-full bg-navy-900 border border-white/10 rounded-lg px-4 py-2 text-white focus:outline-none focus:border-norv/50"
+            />
+          </div>
+          <div className="flex justify-end gap-3 pt-4 border-t border-white/10">
+            <button
+              onClick={() => setAddEmailModal(null)}
+              className="px-4 py-2 rounded-lg bg-white/10 text-white hover:bg-white/20 transition-colors"
+            >
+              Cancel
+            </button>
+            <button
+              onClick={handleAddEmail}
+              disabled={isSubmitting || !emailForm.email.trim()}
+              className="px-4 py-2 rounded-lg bg-norv text-white font-medium hover:bg-norv/80 disabled:opacity-50 transition-colors flex items-center gap-2"
+            >
+              {isSubmitting && <Loader2 size={16} className="animate-spin" />}
+              Add Email
+            </button>
+          </div>
+        </div>
+      </Modal>
+
+      {/* Edit Email Modal */}
+      <Modal
+        isOpen={!!editEmailModal}
+        onClose={() => setEditEmailModal(null)}
+        title="Edit Email"
+        size="sm"
+      >
+        <div className="p-6 space-y-4">
+          <div>
+            <label className="block text-sm text-white/60 mb-1">Email Address</label>
+            <input
+              type="email"
+              value={emailForm.email}
+              onChange={(e) => setEmailForm(prev => ({ ...prev, email: e.target.value }))}
+              className="w-full bg-navy-900 border border-white/10 rounded-lg px-4 py-2 text-white focus:outline-none focus:border-norv/50"
+            />
+          </div>
+          <div className="flex justify-end gap-3 pt-4 border-t border-white/10">
+            <button
+              onClick={() => setEditEmailModal(null)}
+              className="px-4 py-2 rounded-lg bg-white/10 text-white hover:bg-white/20 transition-colors"
+            >
+              Cancel
+            </button>
+            <button
+              onClick={handleUpdateEmail}
+              disabled={isSubmitting}
+              className="px-4 py-2 rounded-lg bg-norv text-white font-medium hover:bg-norv/80 disabled:opacity-50 transition-colors flex items-center gap-2"
+            >
+              {isSubmitting && <Loader2 size={16} className="animate-spin" />}
+              Save Changes
+            </button>
+          </div>
+        </div>
+      </Modal>
+
+      {/* ============ CONFIRM DIALOGS ============ */}
+
+      {/* Delete Property Confirm */}
+      <ConfirmDialog
+        isOpen={!!deletePropertyConfirm}
+        onClose={() => setDeletePropertyConfirm(null)}
+        onConfirm={handleDeleteProperty}
+        title="Delete Property"
+        message={
+          <div>
+            <p>Delete <strong>{deletePropertyConfirm?.street_address}</strong> and all its contacts?</p>
+            <p className="mt-2 text-red-400">This cannot be undone.</p>
+          </div>
+        }
+        confirmLabel="Delete Property"
+        variant="danger"
+        isLoading={isSubmitting}
+      />
+
+      {/* Delete Contact Confirm */}
+      <ConfirmDialog
+        isOpen={!!deleteContactConfirm}
+        onClose={() => setDeleteContactConfirm(null)}
+        onConfirm={handleDeleteContact}
+        title="Delete Contact"
+        message={`Delete ${deleteContactConfirm?.contact.name} and all their phone numbers/emails?`}
+        confirmLabel="Delete Contact"
+        variant="danger"
+        isLoading={isSubmitting}
+      />
+
+      {/* Delete Phone Confirm */}
+      <ConfirmDialog
+        isOpen={!!deletePhoneConfirm}
+        onClose={() => setDeletePhoneConfirm(null)}
+        onConfirm={handleDeletePhone}
+        title="Delete Phone"
+        message={`Delete phone number ${deletePhoneConfirm?.number}?`}
+        confirmLabel="Delete"
+        variant="danger"
+        isLoading={isSubmitting}
+      />
+
+      {/* Mark DNC Confirm */}
+      <ConfirmDialog
+        isOpen={!!markDNCConfirm}
+        onClose={() => setMarkDNCConfirm(null)}
+        onConfirm={handleMarkDNC}
+        title="Mark as Do Not Call"
+        message={`Mark ${markDNCConfirm?.number} as DNC? This phone will no longer be selectable for campaigns.`}
+        confirmLabel="Mark as DNC"
+        variant="warning"
+        isLoading={isSubmitting}
+      />
+
+      {/* Delete Email Confirm */}
+      <ConfirmDialog
+        isOpen={!!deleteEmailConfirm}
+        onClose={() => setDeleteEmailConfirm(null)}
+        onConfirm={handleDeleteEmail}
+        title="Delete Email"
+        message={`Delete email ${deleteEmailConfirm?.email}?`}
+        confirmLabel="Delete"
+        variant="danger"
+        isLoading={isSubmitting}
+      />
+
+      {/* Bulk Delete Confirm */}
+      <ConfirmDialog
+        isOpen={bulkDeleteConfirm}
+        onClose={() => setBulkDeleteConfirm(false)}
+        onConfirm={handleBulkDelete}
+        title="Delete Properties"
+        message={
+          <div>
+            <p>Delete <strong>{selectedPropertyIds.size}</strong> properties and all their contacts?</p>
+            <p className="mt-2 text-red-400">This cannot be undone.</p>
+          </div>
+        }
+        confirmLabel={`Delete ${selectedPropertyIds.size} Properties`}
+        variant="danger"
+        isLoading={isSubmitting}
+      />
+
+      {/* Bulk DNC Confirm */}
+      <ConfirmDialog
+        isOpen={bulkDNCConfirm}
+        onClose={() => setBulkDNCConfirm(false)}
+        onConfirm={handleBulkMarkDNC}
+        title="Mark All as DNC"
+        message={`Mark ${selectedPhones.size} phone numbers as Do Not Call?`}
+        confirmLabel={`Mark ${selectedPhones.size} as DNC`}
+        variant="warning"
+        isLoading={isSubmitting}
+      />
     </div>
   )
 }

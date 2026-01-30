@@ -15,7 +15,9 @@ import {
   Lock,
   Settings,
   HelpCircle,
-  Users
+  Users,
+  Phone,
+  Sparkles
 } from 'lucide-react'
 
 // Norvan Axes with tools
@@ -63,8 +65,12 @@ const axes = [
     color: 'bg-norw',
     icon: BookOpen,
     tools: [
-      { name: 'NorTrain', path: '/nortrain', active: false, description: 'Script builder' },
-      { name: 'NorGuide', path: '/norguide', active: false, description: 'Documentation' },
+      { name: 'Training Hub', path: '/norw', active: true, description: 'AI training center' },
+      { name: 'Simulation Lab', path: '/norw/simulation', active: true, description: 'Watch AI conversations' },
+      { name: 'Practice Mode', path: '/norw/practice', active: true, description: 'Practice with AI' },
+      { name: 'Script Builder', path: '/norw/scripts', active: true, description: 'Build winning scripts' },
+      { name: 'Scenario Bank', path: '/norw/scenarios', active: true, description: 'Browse scenarios' },
+      { name: 'Call Log Parser', path: '/norw/call-logs', active: true, description: 'Analyze call history' },
     ]
   },
   {
@@ -104,7 +110,7 @@ export default function Sidebar() {
       </div>
 
       {/* Main Navigation */}
-      <div className="p-2">
+      <div className="p-2 space-y-1">
         <Link
           href="/"
           className={`flex items-center gap-3 px-3 py-2 rounded-lg transition-colors ${
@@ -115,6 +121,17 @@ export default function Sidebar() {
         >
           <LayoutDashboard size={18} />
           <span className="font-medium">Dashboard</span>
+        </Link>
+        <Link
+          href="/call-workspace"
+          className={`flex items-center gap-3 px-3 py-2 rounded-lg transition-colors ${
+            pathname === '/call-workspace' 
+              ? 'bg-green-500/20 text-green-400' 
+              : 'text-white/70 hover:bg-white/5 hover:text-white'
+          }`}
+        >
+          <Phone size={18} />
+          <span className="font-medium">Call Workspace</span>
         </Link>
       </div>
 

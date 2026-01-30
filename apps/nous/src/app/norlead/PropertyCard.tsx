@@ -1,5 +1,6 @@
 'use client'
 
+import { useState } from 'react'
 import { 
   MapPin, 
   DollarSign, 
@@ -16,8 +17,17 @@ import {
   AlertCircle,
   CheckCircle2,
   Calendar,
-  CalendarX
+  CalendarX,
+  Pencil,
+  Trash2,
+  UserPlus,
+  Plus,
+  X,
+  Check,
+  Loader2,
+  Ban
 } from 'lucide-react'
+import { DropdownMenu } from '@/components/ui'
 
 interface Phone {
   id: string
@@ -69,6 +79,18 @@ interface Props {
   onToggleEmail: (id: string) => void
   onSelectAllPhones: () => void
   onSelectAllEmails: () => void
+  onEditProperty: (property: Property) => void
+  onDeleteProperty: (property: Property) => void
+  onAddContact: (property: Property) => void
+  onEditContact: (contact: Contact, propertyId: string) => void
+  onDeleteContact: (contact: Contact, propertyId: string) => void
+  onAddPhone: (contactId: string) => void
+  onAddEmail: (contactId: string) => void
+  onEditPhone: (phone: Phone) => void
+  onDeletePhone: (phone: Phone) => void
+  onMarkDNC: (phone: Phone) => void
+  onEditEmail: (email: Email) => void
+  onDeleteEmail: (email: Email) => void
 }
 
 export function PropertyCard({
@@ -80,7 +102,19 @@ export function PropertyCard({
   onTogglePhone,
   onToggleEmail,
   onSelectAllPhones,
-  onSelectAllEmails
+  onSelectAllEmails,
+  onEditProperty,
+  onDeleteProperty,
+  onAddContact,
+  onEditContact,
+  onDeleteContact,
+  onAddPhone,
+  onAddEmail,
+  onEditPhone,
+  onDeletePhone,
+  onMarkDNC,
+  onEditEmail,
+  onDeleteEmail
 }: Props) {
   const formatPrice = (price: number | null) => {
     if (!price) return 'N/A'
@@ -124,17 +158,36 @@ export function PropertyCard({
     c.emails?.some(e => selectedEmails.has(e.id))
   )
 
+  const propertyMenuItems = [
+    {
+      label: 'Edit Property',
+      icon: <Pencil size={16} />,
+      onClick: () => onEditProperty(property)
+    },
+    {
+      label: 'Add Contact',
+      icon: <UserPlus size={16} />,
+      onClick: () => onAddContact(property)
+    },
+    {
+      label: 'Delete Property',
+      icon: <Trash2 size={16} />,
+      onClick: () => onDeleteProperty(property),
+      variant: 'danger' as const
+    }
+  ]
+
   return (
     <div className={`bg-navy-800 border rounded-xl overflow-hidden transition-colors ${
       hasSelectedItems ? 'border-norx/50' : 'border-white/10 hover:border-white/20'
     }`}>
       {/* Property Header */}
-      <div 
-        className="p-4 cursor-pointer"
-        onClick={onToggle}
-      >
+      <div className="p-4">
         <div className="flex items-start justify-between">
-          <div className="flex-1">
+          <div 
+            className="flex-1 cursor-pointer"
+            onClick={onToggle}
+          >
             {/* Address */}
             <div className="flex items-center gap-2 mb-2">
               <MapPin size={16} className="text-gold-500 flex-shrink-0" />
@@ -225,10 +278,16 @@ export function PropertyCard({
             </div>
           </div>
 
-          {/* Expand Button */}
-          <button className="p-2 rounded-lg bg-white/5 text-white/50 hover:text-white transition-colors">
-            {isExpanded ? <ChevronUp size={18} /> : <ChevronDown size={18} />}
-          </button>
+          {/* Actions */}
+          <div className="flex items-center gap-1">
+            <DropdownMenu items={propertyMenuItems} />
+            <button 
+              onClick={onToggle}
+              className="p-2 rounded-lg bg-white/5 text-white/50 hover:text-white transition-colors"
+            >
+              {isExpanded ? <ChevronUp size={18} /> : <ChevronDown size={18} />}
+            </button>
+          </div>
         </div>
       </div>
 
@@ -266,16 +325,33 @@ export function PropertyCard({
               <ContactCard
                 key={contact.id}
                 contact={contact}
+                propertyId={property.id}
                 selectedPhones={selectedPhones}
                 selectedEmails={selectedEmails}
                 onTogglePhone={onTogglePhone}
                 onToggleEmail={onToggleEmail}
+                onEditContact={onEditContact}
+                onDeleteContact={onDeleteContact}
+                onAddPhone={onAddPhone}
+                onAddEmail={onAddEmail}
+                onEditPhone={onEditPhone}
+                onDeletePhone={onDeletePhone}
+                onMarkDNC={onMarkDNC}
+                onEditEmail={onEditEmail}
+                onDeleteEmail={onDeleteEmail}
               />
             ))}
 
             {(!property.contacts || property.contacts.length === 0) && (
               <div className="text-center text-white/40 py-4">
-                No contacts found for this property
+                <p className="mb-2">No contacts found for this property</p>
+                <button
+                  onClick={() => onAddContact(property)}
+                  className="text-norv hover:text-norv/80 text-sm flex items-center gap-1 mx-auto"
+                >
+                  <Plus size={14} />
+                  Add Contact
+                </button>
               </div>
             )}
           </div>
@@ -288,34 +364,81 @@ export function PropertyCard({
 // Contact Card Sub-component
 function ContactCard({
   contact,
+  propertyId,
   selectedPhones,
   selectedEmails,
   onTogglePhone,
-  onToggleEmail
+  onToggleEmail,
+  onEditContact,
+  onDeleteContact,
+  onAddPhone,
+  onAddEmail,
+  onEditPhone,
+  onDeletePhone,
+  onMarkDNC,
+  onEditEmail,
+  onDeleteEmail
 }: {
   contact: Contact
+  propertyId: string
   selectedPhones: Set<string>
   selectedEmails: Set<string>
   onTogglePhone: (id: string) => void
   onToggleEmail: (id: string) => void
+  onEditContact: (contact: Contact, propertyId: string) => void
+  onDeleteContact: (contact: Contact, propertyId: string) => void
+  onAddPhone: (contactId: string) => void
+  onAddEmail: (contactId: string) => void
+  onEditPhone: (phone: Phone) => void
+  onDeletePhone: (phone: Phone) => void
+  onMarkDNC: (phone: Phone) => void
+  onEditEmail: (email: Email) => void
+  onDeleteEmail: (email: Email) => void
 }) {
+  const contactMenuItems = [
+    {
+      label: 'Edit Contact',
+      icon: <Pencil size={16} />,
+      onClick: () => onEditContact(contact, propertyId)
+    },
+    {
+      label: 'Add Phone',
+      icon: <Phone size={16} />,
+      onClick: () => onAddPhone(contact.id)
+    },
+    {
+      label: 'Add Email',
+      icon: <Mail size={16} />,
+      onClick: () => onAddEmail(contact.id)
+    },
+    {
+      label: 'Delete Contact',
+      icon: <Trash2 size={16} />,
+      onClick: () => onDeleteContact(contact, propertyId),
+      variant: 'danger' as const
+    }
+  ]
+
   return (
     <div className="bg-navy-800 rounded-xl p-4">
       {/* Contact Header */}
-      <div className="flex items-center gap-2 mb-3">
-        <User size={16} className="text-gold-500" />
-        <span className="font-semibold text-white">{contact.name}</span>
-        {contact.role && (
-          <span className="text-xs px-2 py-0.5 rounded bg-white/10 text-white/60">
-            {contact.role}
-          </span>
-        )}
-        {contact.is_decision_maker && (
-          <span className="text-xs px-2 py-0.5 rounded bg-green-500/20 text-green-400 flex items-center gap-1">
-            <Star size={10} />
-            Decision Maker
-          </span>
-        )}
+      <div className="flex items-center justify-between mb-3">
+        <div className="flex items-center gap-2">
+          <User size={16} className="text-gold-500" />
+          <span className="font-semibold text-white">{contact.name}</span>
+          {contact.role && (
+            <span className="text-xs px-2 py-0.5 rounded bg-white/10 text-white/60">
+              {contact.role}
+            </span>
+          )}
+          {contact.is_decision_maker && (
+            <span className="text-xs px-2 py-0.5 rounded bg-green-500/20 text-green-400 flex items-center gap-1">
+              <Star size={10} />
+              Decision Maker
+            </span>
+          )}
+        </div>
+        <DropdownMenu items={contactMenuItems} />
       </div>
 
       {/* Phones */}
@@ -329,6 +452,9 @@ function ContactCard({
                 phone={phone}
                 isSelected={selectedPhones.has(phone.id)}
                 onToggle={() => onTogglePhone(phone.id)}
+                onEdit={() => onEditPhone(phone)}
+                onDelete={() => onDeletePhone(phone)}
+                onMarkDNC={() => onMarkDNC(phone)}
               />
             ))}
           </div>
@@ -346,6 +472,8 @@ function ContactCard({
                 email={email}
                 isSelected={selectedEmails.has(email.id)}
                 onToggle={() => onToggleEmail(email.id)}
+                onEdit={() => onEditEmail(email)}
+                onDelete={() => onDeleteEmail(email)}
               />
             ))}
           </div>
@@ -355,7 +483,23 @@ function ContactCard({
       {/* No contact info */}
       {(!contact.phones || contact.phones.length === 0) && 
        (!contact.emails || contact.emails.length === 0) && (
-        <div className="text-white/30 text-sm">No contact information</div>
+        <div className="text-white/30 text-sm flex items-center gap-4">
+          <span>No contact information</span>
+          <button
+            onClick={() => onAddPhone(contact.id)}
+            className="text-emerald-400 hover:text-emerald-300 text-xs flex items-center gap-1"
+          >
+            <Plus size={12} />
+            Add Phone
+          </button>
+          <button
+            onClick={() => onAddEmail(contact.id)}
+            className="text-amber-400 hover:text-amber-300 text-xs flex items-center gap-1"
+          >
+            <Plus size={12} />
+            Add Email
+          </button>
+        </div>
       )}
     </div>
   )
@@ -365,56 +509,113 @@ function ContactCard({
 function PhoneChip({ 
   phone, 
   isSelected, 
-  onToggle 
+  onToggle,
+  onEdit,
+  onDelete,
+  onMarkDNC
 }: { 
   phone: Phone
   isSelected: boolean
-  onToggle: () => void 
+  onToggle: () => void
+  onEdit: () => void
+  onDelete: () => void
+  onMarkDNC: () => void
 }) {
+  const [showActions, setShowActions] = useState(false)
   const isDnc = phone.is_dnc === true
 
   return (
-    <button
-      onClick={(e) => {
-        e.stopPropagation()
-        if (!isDnc) onToggle()
-      }}
-      disabled={isDnc}
-      className={`flex items-center gap-2 px-3 py-2 rounded-lg transition-all ${
-        isDnc
-          ? 'bg-red-500/10 text-red-400/50 cursor-not-allowed'
-          : isSelected
-          ? 'bg-emerald-500/30 text-emerald-400 ring-2 ring-emerald-500/50'
-          : 'bg-emerald-500/20 text-emerald-400 hover:bg-emerald-500/30'
-      }`}
+    <div 
+      className="relative group"
+      onMouseEnter={() => setShowActions(true)}
+      onMouseLeave={() => setShowActions(false)}
     >
-      {/* Checkbox */}
-      {!isDnc && (
-        <div className={`w-4 h-4 rounded border flex items-center justify-center ${
-          isSelected ? 'bg-emerald-500 border-emerald-500' : 'border-emerald-500/50'
-        }`}>
-          {isSelected && <CheckCircle2 size={12} className="text-white" />}
+      <button
+        onClick={(e) => {
+          e.stopPropagation()
+          if (!isDnc) onToggle()
+        }}
+        disabled={isDnc}
+        className={`flex items-center gap-2 px-3 py-2 rounded-lg transition-all ${
+          isDnc
+            ? 'bg-red-500/10 text-red-400/50 cursor-not-allowed'
+            : isSelected
+            ? 'bg-emerald-500/30 text-emerald-400 ring-2 ring-emerald-500/50'
+            : 'bg-emerald-500/20 text-emerald-400 hover:bg-emerald-500/30'
+        }`}
+      >
+        {/* Checkbox */}
+        {!isDnc && (
+          <div className={`w-4 h-4 rounded border flex items-center justify-center ${
+            isSelected ? 'bg-emerald-500 border-emerald-500' : 'border-emerald-500/50'
+          }`}>
+            {isSelected && <CheckCircle2 size={12} className="text-white" />}
+          </div>
+        )}
+        
+        <Phone size={14} />
+        <a 
+          href={`tel:${phone.number}`}
+          onClick={(e) => e.stopPropagation()}
+          className="font-mono text-sm hover:underline"
+        >
+          {phone.number}
+        </a>
+        
+        {phone.type && (
+          <span className="text-xs opacity-60">({phone.type})</span>
+        )}
+        
+        {phone.is_verified && (
+          <CheckCircle2 size={12} className="text-emerald-300" />
+        )}
+        
+        {isDnc && (
+          <span className="flex items-center gap-1 text-xs">
+            <AlertCircle size={12} />
+            DNC
+          </span>
+        )}
+      </button>
+
+      {/* Action buttons */}
+      {showActions && (
+        <div className="absolute -top-8 left-1/2 -translate-x-1/2 flex items-center gap-1 bg-navy-800 border border-white/20 rounded-lg p-1 shadow-lg z-10">
+          <button
+            onClick={(e) => {
+              e.stopPropagation()
+              onEdit()
+            }}
+            className="p-1.5 rounded hover:bg-white/10 text-white/60 hover:text-white transition-colors"
+            title="Edit"
+          >
+            <Pencil size={12} />
+          </button>
+          {!isDnc && (
+            <button
+              onClick={(e) => {
+                e.stopPropagation()
+                onMarkDNC()
+              }}
+              className="p-1.5 rounded hover:bg-red-500/20 text-white/60 hover:text-red-400 transition-colors"
+              title="Mark as DNC"
+            >
+              <Ban size={12} />
+            </button>
+          )}
+          <button
+            onClick={(e) => {
+              e.stopPropagation()
+              onDelete()
+            }}
+            className="p-1.5 rounded hover:bg-red-500/20 text-white/60 hover:text-red-400 transition-colors"
+            title="Delete"
+          >
+            <Trash2 size={12} />
+          </button>
         </div>
       )}
-      
-      <Phone size={14} />
-      <span className="font-mono text-sm">{phone.number}</span>
-      
-      {phone.type && (
-        <span className="text-xs opacity-60">({phone.type})</span>
-      )}
-      
-      {phone.is_verified && (
-        <CheckCircle2 size={12} className="text-emerald-300" />
-      )}
-      
-      {isDnc && (
-        <span className="flex items-center gap-1 text-xs">
-          <AlertCircle size={12} />
-          DNC
-        </span>
-      )}
-    </button>
+    </div>
   )
 }
 
@@ -422,37 +623,81 @@ function PhoneChip({
 function EmailChip({ 
   email, 
   isSelected, 
-  onToggle 
+  onToggle,
+  onEdit,
+  onDelete
 }: { 
   email: Email
   isSelected: boolean
-  onToggle: () => void 
+  onToggle: () => void
+  onEdit: () => void
+  onDelete: () => void
 }) {
+  const [showActions, setShowActions] = useState(false)
+
   return (
-    <button
-      onClick={(e) => {
-        e.stopPropagation()
-        onToggle()
-      }}
-      className={`flex items-center gap-2 px-3 py-2 rounded-lg transition-all ${
-        isSelected
-          ? 'bg-amber-500/30 text-amber-400 ring-2 ring-amber-500/50'
-          : 'bg-amber-500/20 text-amber-400 hover:bg-amber-500/30'
-      }`}
+    <div 
+      className="relative group"
+      onMouseEnter={() => setShowActions(true)}
+      onMouseLeave={() => setShowActions(false)}
     >
-      {/* Checkbox */}
-      <div className={`w-4 h-4 rounded border flex items-center justify-center ${
-        isSelected ? 'bg-amber-500 border-amber-500' : 'border-amber-500/50'
-      }`}>
-        {isSelected && <CheckCircle2 size={12} className="text-white" />}
-      </div>
-      
-      <Mail size={14} />
-      <span className="text-sm">{email.email}</span>
-      
-      {email.is_verified && (
-        <CheckCircle2 size={12} className="text-amber-300" />
+      <button
+        onClick={(e) => {
+          e.stopPropagation()
+          onToggle()
+        }}
+        className={`flex items-center gap-2 px-3 py-2 rounded-lg transition-all ${
+          isSelected
+            ? 'bg-amber-500/30 text-amber-400 ring-2 ring-amber-500/50'
+            : 'bg-amber-500/20 text-amber-400 hover:bg-amber-500/30'
+        }`}
+      >
+        {/* Checkbox */}
+        <div className={`w-4 h-4 rounded border flex items-center justify-center ${
+          isSelected ? 'bg-amber-500 border-amber-500' : 'border-amber-500/50'
+        }`}>
+          {isSelected && <CheckCircle2 size={12} className="text-white" />}
+        </div>
+        
+        <Mail size={14} />
+        <a 
+          href={`mailto:${email.email}`}
+          onClick={(e) => e.stopPropagation()}
+          className="text-sm hover:underline"
+        >
+          {email.email}
+        </a>
+        
+        {email.is_verified && (
+          <CheckCircle2 size={12} className="text-amber-300" />
+        )}
+      </button>
+
+      {/* Action buttons */}
+      {showActions && (
+        <div className="absolute -top-8 left-1/2 -translate-x-1/2 flex items-center gap-1 bg-navy-800 border border-white/20 rounded-lg p-1 shadow-lg z-10">
+          <button
+            onClick={(e) => {
+              e.stopPropagation()
+              onEdit()
+            }}
+            className="p-1.5 rounded hover:bg-white/10 text-white/60 hover:text-white transition-colors"
+            title="Edit"
+          >
+            <Pencil size={12} />
+          </button>
+          <button
+            onClick={(e) => {
+              e.stopPropagation()
+              onDelete()
+            }}
+            className="p-1.5 rounded hover:bg-red-500/20 text-white/60 hover:text-red-400 transition-colors"
+            title="Delete"
+          >
+            <Trash2 size={12} />
+          </button>
+        </div>
       )}
-    </button>
+    </div>
   )
 }

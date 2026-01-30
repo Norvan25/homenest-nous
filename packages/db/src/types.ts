@@ -424,9 +424,7 @@ export type CallLog = Database['public']['Tables']['call_log']['Row']
 export type CallableLead = Database['public']['Views']['callable_leads']['Row']
 export type CrmLead = Database['public']['Tables']['crm_leads']['Row']
 export type CrmActivity = Database['public']['Tables']['crm_activities']['Row']
-export type CrmLeadFull = Database['public']['Views']['crm_leads_full']['Row']
-
-// CRM Status and Priority types
+export type CrmLeadFull = Database['public']['Views']['crm_leads_full']['Row']// CRM Status and Priority types
 export type CrmStatus = 'new' | 'contacted' | 'interested' | 'appointment' | 'closed' | 'dead'
 export type CrmPriority = 'hot' | 'normal' | 'low'
 export type ActivityType = 'call' | 'email' | 'note' | 'status_change'
