@@ -349,7 +349,7 @@ export default function CallQueuePanel({ isOpen, onClose }: Props) {
       // Update DB - only status field to avoid column errors
       const { error } = await supabase
         .from('call_queue')
-        .update({ status: 'cancelled' })
+        .update({ status: 'cancelled' } as any)
         .eq('id', activeCall.queueItemId)
       
       if (error) {
@@ -491,7 +491,7 @@ export default function CallQueuePanel({ isOpen, onClose }: Props) {
                       // Only update status field to avoid column errors
                       const { error } = await supabase
                         .from('call_queue')
-                        .update({ status: 'cancelled' })
+                        .update({ status: 'cancelled' } as any)
                         .eq('id', callingItem.id)
                       
                       if (error) {
