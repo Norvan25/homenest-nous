@@ -87,9 +87,10 @@ export async function GET(request: NextRequest) {
         agentDetails[agentIdToFetch] = agent;
 
         // Get conversations for this agent
-        const conversations = await elevenlabs.listConversations(agentIdToFetch);
+        const conversationsResponse = await elevenlabs.listConversations(agentIdToFetch);
+        const conversations = conversationsResponse?.conversations || [];
 
-        if (conversations && conversations.length > 0) {
+        if (conversations.length > 0) {
           for (const conv of conversations) {
             // Apply date filters
             const convDate = new Date(conv.created_at || conv.start_time);
