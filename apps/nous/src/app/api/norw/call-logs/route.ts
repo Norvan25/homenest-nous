@@ -165,8 +165,8 @@ export async function POST(request: NextRequest) {
 
     const elevenlabs = getElevenLabs();
 
-    // Fetch the conversation
-    const conversation = await elevenlabs.getConversation(conversationId);
+    // Fetch the conversation - cast to any for flexible property access
+    const conversation = await elevenlabs.getConversation(conversationId) as any;
 
     if (!conversation) {
       return NextResponse.json({ error: 'Conversation not found' }, { status: 404 });
