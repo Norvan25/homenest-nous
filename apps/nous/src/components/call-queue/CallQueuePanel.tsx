@@ -347,9 +347,9 @@ export default function CallQueuePanel({ isOpen, onClose }: Props) {
       console.log('End call response:', data)
       
       // Update DB - only status field to avoid column errors
-      const { error } = await supabase
-        .from('call_queue')
-        .update({ status: 'cancelled' } as any)
+      const { error } = await (supabase
+        .from('call_queue') as any)
+        .update({ status: 'cancelled' })
         .eq('id', activeCall.queueItemId)
       
       if (error) {
@@ -489,9 +489,9 @@ export default function CallQueuePanel({ isOpen, onClose }: Props) {
                         await fetch(`/api/elevenlabs/call/${callingItem.conversation_id}`, { method: 'DELETE' })
                       }
                       // Only update status field to avoid column errors
-                      const { error } = await supabase
-                        .from('call_queue')
-                        .update({ status: 'cancelled' } as any)
+                      const { error } = await (supabase
+                        .from('call_queue') as any)
+                        .update({ status: 'cancelled' })
                         .eq('id', callingItem.id)
                       
                       if (error) {
