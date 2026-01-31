@@ -66,6 +66,7 @@ interface Property {
   list_date: string | null
   dom: number | null
   status: string | null
+  source: string | null
   contacts?: Contact[]
 }
 
