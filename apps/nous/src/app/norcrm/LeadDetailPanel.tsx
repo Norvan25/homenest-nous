@@ -81,7 +81,11 @@ interface CRMLead {
   next_action: string | null
   next_action_date: string | null
   last_activity_date: string | null
+  created_at: string
+  updated_at: string
   property?: Property
+  callablePhones: number
+  totalEmails: number
 }
 
 interface Activity {
