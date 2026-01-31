@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import { ArrowLeft, Copy, Send, RefreshCw, Sparkles, MessageCircle } from 'lucide-react'
 import Link from 'next/link'
+import { DocumentFeedback } from '@/components/DocumentFeedback'
 
 const smsTypes = [
   { id: 'appointment-reminder', name: 'Appointment Reminder', example: 'Hi [Name], just confirming our meeting tomorrow at...' },
@@ -15,6 +16,7 @@ const smsTypes = [
 export default function SMSWriterPage() {
   const [selectedType, setSelectedType] = useState<string | null>(null)
   const [generatedSMS, setGeneratedSMS] = useState('')
+  const [generatedDocId, setGeneratedDocId] = useState<string | null>(null)
   const [isGenerating, setIsGenerating] = useState(false)
   const [recipientName, setRecipientName] = useState('')
   const [customContext, setCustomContext] = useState('')
@@ -22,6 +24,7 @@ export default function SMSWriterPage() {
   const generateSMS = async () => {
     if (!selectedType) return
     setIsGenerating(true)
+    setGeneratedDocId(null)
 
     try {
       const response = await fetch('/api/nordosc/generate', {
@@ -34,8 +37,9 @@ export default function SMSWriterPage() {
         }),
       })
 
-      const { content } = await response.json()
+      const { content, document_id } = await response.json()
       setGeneratedSMS(content || 'Failed to generate SMS.')
+      setGeneratedDocId(document_id || null)
     } catch (error) {
       console.error('Failed to generate SMS:', error)
       setGeneratedSMS('Error generating SMS. Check your API configuration.')
@@ -169,18 +173,26 @@ export default function SMSWriterPage() {
               </div>
               
               {generatedSMS && (
-                <div className="flex gap-2 mt-4 justify-center">
-                  <button
-                    onClick={() => navigator.clipboard.writeText(generatedSMS)}
-                    className="flex items-center gap-2 px-4 py-2 bg-white/10 rounded-lg hover:bg-white/20"
-                  >
-                    <Copy size={16} />
-                    Copy
-                  </button>
-                  <button className="flex items-center gap-2 px-4 py-2 bg-norv text-white rounded-lg hover:bg-norv/80">
-                    <Send size={16} />
-                    Send
-                  </button>
+                <div className="flex items-center justify-between mt-4">
+                  <div className="flex gap-2 justify-center w-full">
+                    <button
+                      onClick={() => navigator.clipboard.writeText(generatedSMS)}
+                      className="flex items-center gap-2 px-4 py-2 bg-white/10 rounded-lg hover:bg-white/20"
+                    >
+                      <Copy size={16} />
+                      Copy
+                    </button>
+                    <button className="flex items-center gap-2 px-4 py-2 bg-norv text-white rounded-lg hover:bg-norv/80">
+                      <Send size={16} />
+                      Send
+                    </button>
+                  </div>
+                </div>
+              )}
+              
+              {generatedSMS && generatedDocId && (
+                <div className="flex justify-end mt-4">
+                  <DocumentFeedback documentId={generatedDocId} />
                 </div>
               )}
             </div>

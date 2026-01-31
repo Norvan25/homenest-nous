@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react'
 import { ArrowLeft, Copy, Save, Send, RefreshCw, Sparkles } from 'lucide-react'
 import Link from 'next/link'
 import { supabase } from '@/lib/supabase'
+import { DocumentFeedback } from '@/components/DocumentFeedback'
 
 interface Scenario {
   id: string
@@ -50,6 +51,7 @@ export default function EmailWriterPage() {
   const [selectedScenario, setSelectedScenario] = useState<Scenario | null>(null)
   const [selectedLead, setSelectedLead] = useState<Lead | null>(null)
   const [generatedEmail, setGeneratedEmail] = useState('')
+  const [generatedDocId, setGeneratedDocId] = useState<string | null>(null)
   const [customInstruction, setCustomInstruction] = useState('')
   const [isGenerating, setIsGenerating] = useState(false)
   const [leads, setLeads] = useState<Lead[]>([])
@@ -86,6 +88,7 @@ export default function EmailWriterPage() {
   const generateEmail = async () => {
     if (!selectedScenario) return
     setIsGenerating(true)
+    setGeneratedDocId(null)
 
     try {
       const response = await fetch('/api/nordosc/generate', {
@@ -99,8 +102,9 @@ export default function EmailWriterPage() {
         }),
       })
 
-      const { content } = await response.json()
+      const { content, document_id } = await response.json()
       setGeneratedEmail(content || 'Failed to generate email. Please try again.')
+      setGeneratedDocId(document_id || null)
     } catch (error) {
       console.error('Failed to generate email:', error)
       setGeneratedEmail('Error generating email. Check your API configuration.')
@@ -112,6 +116,7 @@ export default function EmailWriterPage() {
   const refineEmail = async (instruction: string) => {
     if (!generatedEmail) return
     setIsGenerating(true)
+    setGeneratedDocId(null) // Reset feedback on refine
     try {
       const response = await fetch('/api/nordosc/refine', {
         method: 'POST',
@@ -254,25 +259,31 @@ export default function EmailWriterPage() {
                     {generatedEmail}
                   </div>
                   
-                  <div className="flex gap-2 mt-4">
-                    <button
-                      onClick={copyToClipboard}
-                      className="flex items-center gap-2 px-4 py-2 bg-white/10 rounded-lg hover:bg-white/20"
-                    >
-                      <Copy size={16} />
-                      Copy
-                    </button>
-                    <button
-                      onClick={saveAsTemplate}
-                      className="flex items-center gap-2 px-4 py-2 bg-white/10 rounded-lg hover:bg-white/20"
-                    >
-                      <Save size={16} />
-                      Save
-                    </button>
-                    <button className="flex items-center gap-2 px-4 py-2 bg-norv text-white rounded-lg hover:bg-norv/80">
-                      <Send size={16} />
-                      Send
-                    </button>
+                  <div className="flex items-center justify-between mt-4">
+                    <div className="flex gap-2">
+                      <button
+                        onClick={copyToClipboard}
+                        className="flex items-center gap-2 px-4 py-2 bg-white/10 rounded-lg hover:bg-white/20"
+                      >
+                        <Copy size={16} />
+                        Copy
+                      </button>
+                      <button
+                        onClick={saveAsTemplate}
+                        className="flex items-center gap-2 px-4 py-2 bg-white/10 rounded-lg hover:bg-white/20"
+                      >
+                        <Save size={16} />
+                        Save
+                      </button>
+                      <button className="flex items-center gap-2 px-4 py-2 bg-norv text-white rounded-lg hover:bg-norv/80">
+                        <Send size={16} />
+                        Send
+                      </button>
+                    </div>
+                    
+                    {generatedDocId && (
+                      <DocumentFeedback documentId={generatedDocId} />
+                    )}
                   </div>
                 </>
               ) : (

@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import { ArrowLeft, Copy, Save, Download, RefreshCw, Sparkles } from 'lucide-react'
 import Link from 'next/link'
+import { DocumentFeedback } from '@/components/DocumentFeedback'
 
 const letterTypes = [
   { id: 'introduction', name: 'Introduction Letter', description: 'Introduce yourself to potential clients' },
@@ -15,6 +16,7 @@ const letterTypes = [
 export default function LetterWriterPage() {
   const [selectedType, setSelectedType] = useState<string | null>(null)
   const [generatedLetter, setGeneratedLetter] = useState('')
+  const [generatedDocId, setGeneratedDocId] = useState<string | null>(null)
   const [isGenerating, setIsGenerating] = useState(false)
   const [recipientName, setRecipientName] = useState('')
   const [propertyAddress, setPropertyAddress] = useState('')
@@ -22,6 +24,7 @@ export default function LetterWriterPage() {
   const generateLetter = async () => {
     if (!selectedType) return
     setIsGenerating(true)
+    setGeneratedDocId(null)
 
     try {
       const response = await fetch('/api/nordosc/generate', {
@@ -34,8 +37,9 @@ export default function LetterWriterPage() {
         }),
       })
 
-      const { content } = await response.json()
+      const { content, document_id } = await response.json()
       setGeneratedLetter(content || 'Failed to generate letter.')
+      setGeneratedDocId(document_id || null)
     } catch (error) {
       console.error('Failed to generate letter:', error)
       setGeneratedLetter('Error generating letter. Check your API configuration.')
@@ -137,22 +141,28 @@ export default function LetterWriterPage() {
                     {generatedLetter}
                   </div>
                   
-                  <div className="flex gap-2 mt-4">
-                    <button
-                      onClick={() => navigator.clipboard.writeText(generatedLetter)}
-                      className="flex items-center gap-2 px-4 py-2 bg-white/10 rounded-lg hover:bg-white/20"
-                    >
-                      <Copy size={16} />
-                      Copy
-                    </button>
-                    <button className="flex items-center gap-2 px-4 py-2 bg-white/10 rounded-lg hover:bg-white/20">
-                      <Save size={16} />
-                      Save
-                    </button>
-                    <button className="flex items-center gap-2 px-4 py-2 bg-norv text-white rounded-lg hover:bg-norv/80">
-                      <Download size={16} />
-                      Download PDF
-                    </button>
+                  <div className="flex items-center justify-between mt-4">
+                    <div className="flex gap-2">
+                      <button
+                        onClick={() => navigator.clipboard.writeText(generatedLetter)}
+                        className="flex items-center gap-2 px-4 py-2 bg-white/10 rounded-lg hover:bg-white/20"
+                      >
+                        <Copy size={16} />
+                        Copy
+                      </button>
+                      <button className="flex items-center gap-2 px-4 py-2 bg-white/10 rounded-lg hover:bg-white/20">
+                        <Save size={16} />
+                        Save
+                      </button>
+                      <button className="flex items-center gap-2 px-4 py-2 bg-norv text-white rounded-lg hover:bg-norv/80">
+                        <Download size={16} />
+                        Download PDF
+                      </button>
+                    </div>
+                    
+                    {generatedDocId && (
+                      <DocumentFeedback documentId={generatedDocId} />
+                    )}
                   </div>
                 </>
               ) : (
