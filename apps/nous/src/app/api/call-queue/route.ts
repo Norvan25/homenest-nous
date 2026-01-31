@@ -80,13 +80,22 @@ export async function POST(req: NextRequest) {
     for (const lead of leads) {
       console.log('Processing lead:', lead.id, 'property_id:', lead.property_id)
       
-      const property = lead.properties as { 
+      const propertiesData = lead.properties as Array<{ 
+        id: string; 
+        street_address: string; 
+        city: string;
+        price: number | null;
+        dom: number | null;
+      }> | { 
         id: string; 
         street_address: string; 
         city: string;
         price: number | null;
         dom: number | null;
       } | null
+      
+      // Handle both array (from join) and single object cases
+      const property = Array.isArray(propertiesData) ? propertiesData[0] : propertiesData
       console.log('Property data:', property)
       
       if (!property) {
