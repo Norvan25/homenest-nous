@@ -92,29 +92,30 @@ export async function GET(request: NextRequest) {
 
         if (conversations.length > 0) {
           for (const conv of conversations) {
-            // Apply date filters
-            const convDate = new Date(conv.created_at || conv.start_time);
+            // Apply date filters - cast to any for flexible property access
+            const convAny = conv as any;
+            const convDate = new Date(convAny.created_at || convAny.start_time || Date.now());
             if (dateFrom && convDate < new Date(dateFrom)) continue;
             if (dateTo && convDate > new Date(dateTo)) continue;
 
             // Get full conversation details with transcript
-            let fullConv = conv;
-            if (conv.conversation_id) {
+            let fullConv: any = convAny;
+            if (convAny.conversation_id) {
               try {
-                fullConv = await elevenlabs.getConversation(conv.conversation_id);
+                fullConv = await elevenlabs.getConversation(convAny.conversation_id);
               } catch (e) {
-                console.warn(`Could not fetch full conversation ${conv.conversation_id}`);
+                console.warn(`Could not fetch full conversation ${convAny.conversation_id}`);
               }
             }
 
             allCallLogs.push({
-              id: conv.conversation_id || conv.id,
+              id: convAny.conversation_id || convAny.id,
               agentId: agentIdToFetch,
               agentName: agent.name || 'Unknown Agent',
-              phoneNumber: fullConv.metadata?.to_number || conv.phone_number || 'Unknown',
+              phoneNumber: fullConv.metadata?.to_number || convAny.phone_number || 'Unknown',
               contactName: fullConv.metadata?.contact_name || 'Unknown',
-              duration: fullConv.duration_seconds || conv.duration || 0,
-              status: fullConv.status || conv.status || 'completed',
+              duration: fullConv.duration_seconds || convAny.duration || 0,
+              status: fullConv.status || convAny.status || 'completed',
               outcome: fullConv.analysis?.outcome || 'unknown',
               transcript: parseTranscript(fullConv.transcript || fullConv.messages || []),
               recordingUrl: fullConv.recording_url,
