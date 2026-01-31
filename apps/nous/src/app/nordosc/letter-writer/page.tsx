@@ -73,7 +73,7 @@ export default function LetterWriterPage() {
                     onClick={() => setSelectedType(type.id)}
                     className={`w-full text-left p-3 rounded-lg border transition-colors ${
                       selectedType === type.id
-                        ? 'border-gold-500 bg-gold-500/10'
+                        ? 'border-norv bg-norv/10'
                         : 'border-white/10 hover:border-white/20'
                     }`}
                   >
@@ -115,7 +115,7 @@ export default function LetterWriterPage() {
             <button
               onClick={generateLetter}
               disabled={!selectedType || isGenerating}
-              className="w-full flex items-center justify-center gap-2 bg-gold-500 text-navy-900 px-4 py-3 rounded-lg font-medium hover:bg-gold-400 transition-colors disabled:opacity-50"
+              className="w-full flex items-center justify-center gap-2 bg-norv text-white px-4 py-3 rounded-lg font-medium hover:bg-norv/80 transition-colors disabled:opacity-50"
             >
               {isGenerating ? (
                 <RefreshCw size={20} className="animate-spin" />
@@ -149,7 +149,7 @@ export default function LetterWriterPage() {
                       <Save size={16} />
                       Save
                     </button>
-                    <button className="flex items-center gap-2 px-4 py-2 bg-gold-500 text-navy-900 rounded-lg hover:bg-gold-400">
+                    <button className="flex items-center gap-2 px-4 py-2 bg-norv text-white rounded-lg hover:bg-norv/80">
                       <Download size={16} />
                       Download PDF
                     </button>

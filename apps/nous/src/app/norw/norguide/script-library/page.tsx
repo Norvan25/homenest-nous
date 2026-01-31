@@ -75,7 +75,7 @@ export default function ScriptLibraryPage() {
             <h1 className="text-2xl font-semibold">Script Library</h1>
             <p className="text-white/60">Browse and manage call scripts</p>
           </div>
-          <button className="flex items-center gap-2 bg-gold-500 text-navy-900 px-4 py-2 rounded-lg font-medium hover:bg-gold-400">
+          <button className="flex items-center gap-2 bg-norv text-white px-4 py-2 rounded-lg font-medium hover:bg-norv/80">
             <Plus size={18} />
             New Script
           </button>

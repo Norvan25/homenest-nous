@@ -265,7 +265,7 @@ export default function Sidebar() {
           href="/"
           className={cn(
             "flex items-center gap-2 px-3 py-2 rounded-lg text-sm transition-colors",
-            pathname === '/' ? "bg-gold-500/20 text-gold-500" : "text-white/70 hover:bg-white/5"
+            pathname === '/' ? "bg-norv/20 text-norv" : "text-white/70 hover:bg-white/5"
           )}
         >
           <LayoutDashboard size={18} />
@@ -298,7 +298,7 @@ export default function Sidebar() {
               key={item.id}
               className={cn(
                 "group flex items-center gap-2 px-3 py-2 rounded-lg text-sm transition-colors",
-                pathname === item.tool_path ? "bg-gold-500/20 text-gold-500" : "text-white/70 hover:bg-white/5"
+                pathname === item.tool_path ? "bg-norv/20 text-norv" : "text-white/70 hover:bg-white/5"
               )}
             >
               <Link href={item.tool_path} className="flex items-center gap-2 flex-1">
@@ -423,7 +423,7 @@ export default function Sidebar() {
 
         {/* User */}
         <div className="mt-3 flex items-center gap-2 px-3 py-2">
-          <div className="w-8 h-8 bg-gold-500/20 rounded-full flex items-center justify-center text-gold-500 text-sm font-medium">
+          <div className="w-8 h-8 bg-norv/20 rounded-full flex items-center justify-center text-norv text-sm font-medium">
             SS
           </div>
           <div>
@@ -470,7 +470,7 @@ function NavLink({
         href={item.path}
         className={cn(
           "flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm transition-colors",
-          isActive ? "bg-gold-500/20 text-gold-500" : "text-white/60 hover:bg-white/5"
+          isActive ? "bg-norv/20 text-norv" : "text-white/60 hover:bg-white/5"
         )}
       >
         <IconComponent size={16} />
@@ -482,7 +482,7 @@ function NavLink({
             e.preventDefault()
             onPin(item.path, item.label, item.icon)
           }}
-          className="absolute right-2 top-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 text-white/40 hover:text-gold-500 transition-opacity"
+          className="absolute right-2 top-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 text-white/40 hover:text-norv transition-opacity"
           title="Pin to Quick Access"
         >
           <Pin size={12} />

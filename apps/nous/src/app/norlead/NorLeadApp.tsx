@@ -1150,7 +1150,7 @@ export default function NorLeadApp({ initialLeads, filterOptions, stats }: Props
                 disabled={!cat.active}
                 className={`flex items-center gap-2 px-4 py-2 rounded-lg whitespace-nowrap transition-all ${
                   activeCategory === cat.id
-                    ? 'bg-gold-500/20 text-gold-500 border border-gold-500/30'
+                    ? 'bg-norv/20 text-norv border border-norv/30'
                     : cat.active
                     ? 'bg-navy-800 text-white/60 hover:text-white border border-white/10'
                     : 'bg-navy-800/50 text-white/30 border border-white/5 cursor-not-allowed'

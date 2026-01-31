@@ -71,7 +71,7 @@ export function NorGuideBot() {
       {/* Floating Button */}
       <button
         onClick={() => setIsOpen(true)}
-        className={`fixed bottom-6 right-6 w-14 h-14 bg-gold-500 text-navy-900 rounded-full shadow-lg flex items-center justify-center hover:bg-gold-400 transition-all z-50 ${
+        className={`fixed bottom-6 right-6 w-14 h-14 bg-norv text-white rounded-full shadow-lg flex items-center justify-center hover:bg-norv/80 transition-all z-50 ${
           isOpen ? 'scale-0 opacity-0' : 'scale-100 opacity-100'
         }`}
         aria-label="Open NorGuide assistant"
@@ -92,8 +92,8 @@ export function NorGuideBot() {
             {/* Header */}
             <div className="flex items-center justify-between p-4 border-b border-white/10 bg-navy-800">
               <div className="flex items-center gap-3">
-                <div className="w-10 h-10 bg-gold-500/20 rounded-full flex items-center justify-center">
-                  <MessageCircle size={18} className="text-gold-500" />
+                <div className="w-10 h-10 bg-norv/20 rounded-full flex items-center justify-center">
+                  <MessageCircle size={18} className="text-norv" />
                 </div>
                 <div>
                   <div className="font-medium text-white">NorGuide</div>
@@ -119,7 +119,7 @@ export function NorGuideBot() {
                   <div
                     className={`max-w-[85%] px-4 py-2.5 rounded-2xl text-sm ${
                       message.role === 'user'
-                        ? 'bg-gold-500 text-navy-900 rounded-br-md'
+                        ? 'bg-norv text-white rounded-br-md'
                         : 'bg-white/10 text-white rounded-bl-md'
                     }`}
                   >
@@ -165,13 +165,13 @@ export function NorGuideBot() {
                   onChange={(e) => setInput(e.target.value)}
                   onKeyPress={handleKeyPress}
                   placeholder="Ask anything..."
-                  className="flex-1 bg-white/10 border-0 rounded-xl px-4 py-2.5 text-sm text-white placeholder-white/40 focus:outline-none focus:ring-2 focus:ring-gold-500"
+                  className="flex-1 bg-white/10 border-0 rounded-xl px-4 py-2.5 text-sm text-white placeholder-white/40 focus:outline-none focus:ring-2 focus:ring-norv"
                   disabled={isLoading}
                 />
                 <button
                   onClick={sendMessage}
                   disabled={!input.trim() || isLoading}
-                  className="w-10 h-10 bg-gold-500 rounded-xl flex items-center justify-center text-navy-900 hover:bg-gold-400 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                  className="w-10 h-10 bg-norv rounded-xl flex items-center justify-center text-white hover:bg-norv/80 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                   aria-label="Send message"
                 >
                   <Send size={16} />

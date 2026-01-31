@@ -156,7 +156,7 @@ export default function PracticeRoomPage() {
                     onClick={() => setSelectedPersona(persona)}
                     className={`w-full flex items-center gap-3 p-3 rounded-lg border transition-colors ${
                       selectedPersona?.id === persona.id
-                        ? 'border-gold-500 bg-gold-500/10'
+                        ? 'border-norv bg-norv/10'
                         : 'border-white/10 hover:border-white/20'
                     }`}
                   >
@@ -221,7 +221,7 @@ export default function PracticeRoomPage() {
                     <button
                       onClick={startCall}
                       disabled={isLoading}
-                      className="inline-flex items-center gap-2 bg-gold-500 text-navy-900 px-6 py-3 rounded-lg font-medium hover:bg-gold-400 transition-colors disabled:opacity-50"
+                      className="inline-flex items-center gap-2 bg-norv text-white px-6 py-3 rounded-lg font-medium hover:bg-norv/80 transition-colors disabled:opacity-50"
                     >
                       {isLoading ? (
                         <RefreshCw size={20} className="animate-spin" />
@@ -263,7 +263,7 @@ export default function PracticeRoomPage() {
                         }`}>
                           {session.score}
                         </div>
-                        <button className="text-sm text-gold-500 hover:underline">
+                        <button className="text-sm text-norv hover:underline">
                           View
                         </button>
                       </div>

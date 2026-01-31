@@ -191,7 +191,7 @@ export function PropertyCard({
           >
             {/* Address */}
             <div className="flex items-center gap-2 mb-2">
-              <MapPin size={16} className="text-gold-500 flex-shrink-0" />
+              <MapPin size={16} className="text-norv flex-shrink-0" />
               <span className="font-semibold text-white">
                 {property.street_address}
               </span>
@@ -425,7 +425,7 @@ function ContactCard({
       {/* Contact Header */}
       <div className="flex items-center justify-between mb-3">
         <div className="flex items-center gap-2">
-          <User size={16} className="text-gold-500" />
+          <User size={16} className="text-norv" />
           <span className="font-semibold text-white">{contact.name}</span>
           {contact.role && (
             <span className="text-xs px-2 py-0.5 rounded bg-white/10 text-white/60">

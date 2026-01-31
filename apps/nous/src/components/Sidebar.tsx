@@ -115,7 +115,7 @@ export default function Sidebar() {
           href="/"
           className={`flex items-center gap-3 px-3 py-2 rounded-lg transition-colors ${
             pathname === '/' 
-              ? 'bg-gold-500/20 text-gold-500' 
+              ? 'bg-norv/20 text-norv' 
               : 'text-white/70 hover:bg-white/5 hover:text-white'
           }`}
         >
@@ -168,7 +168,7 @@ export default function Sidebar() {
                     href={tool.active ? tool.path : '#'}
                     className={`flex items-center gap-2 px-3 py-2 rounded-lg text-sm transition-colors ${
                       pathname === tool.path
-                        ? 'bg-gold-500/20 text-gold-500'
+                        ? 'bg-norv/20 text-norv'
                         : tool.active
                         ? 'text-white/70 hover:bg-white/5 hover:text-white'
                         : 'text-white/30 cursor-not-allowed'
@@ -206,8 +206,8 @@ export default function Sidebar() {
       {/* User */}
       <div className="p-4 border-t border-white/10">
         <div className="flex items-center gap-3">
-          <div className="w-8 h-8 bg-gold-500/20 rounded-full flex items-center justify-center">
-            <span className="text-gold-500 font-medium text-sm">SS</span>
+          <div className="w-8 h-8 bg-norv/20 rounded-full flex items-center justify-center">
+            <span className="text-norv font-medium text-sm">SS</span>
           </div>
           <div className="flex-1">
             <div className="text-sm font-medium text-white">Suzanna</div>

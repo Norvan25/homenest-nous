@@ -562,14 +562,14 @@ export default function Dashboard({ initialData }: Props) {
 
           <Link
             href="/norcrm?status=new"
-            className="bg-navy-800 border border-white/10 rounded-xl p-6 hover:border-gold-500/50 transition-colors group"
+            className="bg-navy-800 border border-white/10 rounded-xl p-6 hover:border-norv/50 transition-colors group"
           >
             <div className="flex items-center gap-4">
-              <div className="w-12 h-12 bg-gold-500/20 rounded-lg flex items-center justify-center">
-                <Phone className="text-gold-500" size={24} />
+              <div className="w-12 h-12 bg-norv/20 rounded-lg flex items-center justify-center">
+                <Phone className="text-norv" size={24} />
               </div>
               <div>
-                <div className="font-semibold text-white group-hover:text-gold-500 transition-colors">
+                <div className="font-semibold text-white group-hover:text-norv transition-colors">
                   Start Calling
                 </div>
                 <div className="text-sm text-white/50">

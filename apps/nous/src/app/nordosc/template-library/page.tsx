@@ -106,7 +106,7 @@ export default function TemplateLibraryPage() {
           </div>
           <Link
             href="/nordosc/email-writer"
-            className="flex items-center gap-2 bg-gold-500 text-navy-900 px-4 py-2 rounded-lg font-medium hover:bg-gold-400"
+            className="flex items-center gap-2 bg-norv text-white px-4 py-2 rounded-lg font-medium hover:bg-norv/80"
           >
             <Plus size={18} />
             Create New
