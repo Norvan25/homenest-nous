@@ -102,6 +102,76 @@ body {
   border-color: var(--accent-color);
 }
 
+/* ==========================================
+   DYNAMIC ACCENT COLOR OVERRIDES
+   Override Tailwind's norv color with CSS variable
+   ========================================== */
+
+/* Background colors */
+.bg-norv {
+  background-color: var(--accent-color) !important;
+}
+
+.bg-norv\/20 {
+  background-color: color-mix(in srgb, var(--accent-color) 20%, transparent) !important;
+}
+
+.bg-norv\/10 {
+  background-color: color-mix(in srgb, var(--accent-color) 10%, transparent) !important;
+}
+
+.hover\:bg-norv:hover {
+  background-color: var(--accent-color) !important;
+}
+
+.hover\:bg-norv\/80:hover {
+  background-color: color-mix(in srgb, var(--accent-color) 80%, transparent) !important;
+}
+
+/* Text colors */
+.text-norv {
+  color: var(--accent-color) !important;
+}
+
+/* Border colors */
+.border-norv {
+  border-color: var(--accent-color) !important;
+}
+
+.border-norv\/50 {
+  border-color: color-mix(in srgb, var(--accent-color) 50%, transparent) !important;
+}
+
+/* Focus states */
+.focus\:border-norv:focus {
+  border-color: var(--accent-color) !important;
+}
+
+/* Ring colors */
+.ring-norv {
+  --tw-ring-color: var(--accent-color) !important;
+}
+
+/* Accent for form elements */
+.accent-norv {
+  accent-color: var(--accent-color) !important;
+}
+
+/* Hover text */
+.hover\:text-norv:hover {
+  color: var(--accent-color) !important;
+}
+
+.group:hover .group-hover\:text-norv {
+  color: var(--accent-color) !important;
+}
+
+/* Active nav items in sidebar */
+.bg-norv\/20.text-norv {
+  background-color: color-mix(in srgb, var(--accent-color) 20%, transparent) !important;
+  color: var(--accent-color) !important;
+}
+
 /* Light theme specific overrides */
 .light-theme .bg-navy-900 {
   background-color: var(--bg-primary) !important;
