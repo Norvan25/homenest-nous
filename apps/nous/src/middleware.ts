@@ -36,14 +36,17 @@ export async function middleware(req: NextRequest) {
 
   const { data: { session } } = await supabase.auth.getSession()
 
-  // Protect all routes except /login
-  if (!session && !req.nextUrl.pathname.startsWith('/login')) {
+  const isAuthPage = req.nextUrl.pathname.startsWith('/login') || 
+                     req.nextUrl.pathname.startsWith('/auth')
+
+  // Protect all routes except login and auth
+  if (!session && !isAuthPage) {
     const redirectUrl = new URL('/login', req.url)
     return NextResponse.redirect(redirectUrl)
   }
 
-  // Redirect logged in users away from login page
-  if (session && req.nextUrl.pathname.startsWith('/login')) {
+  // Redirect logged in users away from login page (but allow auth/reset-password)
+  if (session && req.nextUrl.pathname === '/login') {
     const redirectUrl = new URL('/', req.url)
     return NextResponse.redirect(redirectUrl)
   }

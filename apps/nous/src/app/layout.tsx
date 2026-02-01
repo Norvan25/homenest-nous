@@ -1,9 +1,5 @@
 import type { Metadata } from 'next'
 import './globals.css'
-import { Sidebar } from '@/components/layout'
-import { ToastProvider } from '@/components/ui'
-import { AssistantWidget } from '@/components/assistant'
-import { NorGuideBot } from '@/components/NorGuideBot'
 
 export const metadata: Metadata = {
   title: 'HomeNest Nous',
@@ -17,17 +13,8 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en">
-      <body className="font-sans">
-        <ToastProvider>
-          <div className="flex h-screen">
-            <Sidebar />
-            <main className="flex-1 overflow-auto p-6 bg-navy-900">
-              {children}
-            </main>
-          </div>
-          <AssistantWidget />
-          <NorGuideBot />
-        </ToastProvider>
+      <body className="font-sans bg-navy-900">
+        {children}
       </body>
     </html>
   )
