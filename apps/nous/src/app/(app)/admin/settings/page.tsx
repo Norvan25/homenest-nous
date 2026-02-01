@@ -735,12 +735,17 @@ function AppearanceTab() {
                 key={color.id}
                 onClick={() => setAccentColor(color.id)}
                 className={`relative w-12 h-12 rounded-full transition-transform hover:scale-110 ${
-                  accentColor === color.id ? 'ring-2 ring-offset-2 ring-offset-navy-800' : ''
+                  accentColor === color.id 
+                    ? `ring-2 ring-offset-2 ring-offset-navy-800 ${
+                        color.id === 'cyan' ? 'ring-[#00A6FB]' :
+                        color.id === 'purple' ? 'ring-[#8B5CF6]' :
+                        color.id === 'green' ? 'ring-[#10B981]' :
+                        color.id === 'amber' ? 'ring-[#F59E0B]' :
+                        'ring-[#EC4899]'
+                      }` 
+                    : ''
                 }`}
-                style={{ 
-                  backgroundColor: color.color,
-                  ringColor: accentColor === color.id ? color.color : undefined
-                }}
+                style={{ backgroundColor: color.color }}
                 title={color.name}
               >
                 {accentColor === color.id && (
