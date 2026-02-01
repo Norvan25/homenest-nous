@@ -4,37 +4,202 @@
 @tailwind components;
 @tailwind utilities;
 
+/* ==========================================
+   THEME VARIABLES
+   ========================================== */
+
 :root {
+  /* Dark theme (default) */
   --navy-900: #0A1628;
   --navy-800: #132238;
+  --navy-700: #1a2f4a;
   --gold-500: #C9A962;
   --cyan-400: #00D9FF;
+  
+  /* Accent color (can be overridden by JS) */
+  --accent-color: #00A6FB;
+  
+  /* Theme colors */
+  --bg-primary: #0A1628;
+  --bg-secondary: #132238;
+  --bg-tertiary: #1a2f4a;
+  --text-primary: #ffffff;
+  --text-secondary: rgba(255, 255, 255, 0.7);
+  --text-tertiary: rgba(255, 255, 255, 0.5);
+  --text-muted: rgba(255, 255, 255, 0.3);
+  --border-color: rgba(255, 255, 255, 0.1);
+  --border-color-strong: rgba(255, 255, 255, 0.2);
 }
+
+/* Light theme */
+.light-theme {
+  --bg-primary: #f8fafc;
+  --bg-secondary: #ffffff;
+  --bg-tertiary: #f1f5f9;
+  --text-primary: #0f172a;
+  --text-secondary: #334155;
+  --text-tertiary: #64748b;
+  --text-muted: #94a3b8;
+  --border-color: rgba(0, 0, 0, 0.1);
+  --border-color-strong: rgba(0, 0, 0, 0.2);
+  --navy-900: #f8fafc;
+  --navy-800: #ffffff;
+  --navy-700: #f1f5f9;
+}
+
+/* ==========================================
+   BASE STYLES
+   ========================================== */
 
 body {
-  background-color: var(--navy-900);
-  color: white;
+  background-color: var(--bg-primary);
+  color: var(--text-primary);
+  transition: background-color 0.3s ease, color 0.3s ease;
 }
 
-/* Custom scrollbar */
+/* Theme utility classes */
+.theme-bg {
+  background-color: var(--bg-primary);
+  transition: background-color 0.3s ease;
+}
+
+.theme-bg-secondary {
+  background-color: var(--bg-secondary);
+  transition: background-color 0.3s ease;
+}
+
+.theme-bg-tertiary {
+  background-color: var(--bg-tertiary);
+  transition: background-color 0.3s ease;
+}
+
+.theme-text {
+  color: var(--text-primary);
+}
+
+.theme-text-secondary {
+  color: var(--text-secondary);
+}
+
+.theme-text-muted {
+  color: var(--text-muted);
+}
+
+.theme-border {
+  border-color: var(--border-color);
+}
+
+/* Accent color utilities */
+.accent-bg {
+  background-color: var(--accent-color);
+}
+
+.accent-text {
+  color: var(--accent-color);
+}
+
+.accent-border {
+  border-color: var(--accent-color);
+}
+
+/* Light theme specific overrides */
+.light-theme .bg-navy-900 {
+  background-color: var(--bg-primary) !important;
+}
+
+.light-theme .bg-navy-800 {
+  background-color: var(--bg-secondary) !important;
+}
+
+.light-theme .bg-navy-800\/50 {
+  background-color: rgba(255, 255, 255, 0.8) !important;
+}
+
+.light-theme .text-white {
+  color: var(--text-primary) !important;
+}
+
+.light-theme .text-white\/60,
+.light-theme .text-white\/50,
+.light-theme .text-white\/40,
+.light-theme .text-white\/30 {
+  color: var(--text-tertiary) !important;
+}
+
+.light-theme .text-white\/80,
+.light-theme .text-white\/70 {
+  color: var(--text-secondary) !important;
+}
+
+.light-theme .border-white\/10,
+.light-theme .border-white\/5 {
+  border-color: var(--border-color) !important;
+}
+
+.light-theme .border-white\/20 {
+  border-color: var(--border-color-strong) !important;
+}
+
+.light-theme .bg-white\/5,
+.light-theme .bg-white\/10 {
+  background-color: rgba(0, 0, 0, 0.05) !important;
+}
+
+.light-theme .hover\:bg-white\/5:hover,
+.light-theme .hover\:bg-white\/10:hover {
+  background-color: rgba(0, 0, 0, 0.1) !important;
+}
+
+.light-theme .placeholder-white\/30::placeholder {
+  color: var(--text-muted) !important;
+}
+
+/* Sidebar collapsed state */
+[data-sidebar="collapsed"] .sidebar-container {
+  width: 64px !important;
+}
+
+[data-sidebar="collapsed"] .sidebar-label {
+  display: none !important;
+}
+
+[data-sidebar="collapsed"] .sidebar-section-title {
+  display: none !important;
+}
+
+[data-sidebar="collapsed"] .sidebar-logo-text {
+  display: none !important;
+}
+
+[data-sidebar="collapsed"] main {
+  margin-left: 64px !important;
+}
+
+/* ==========================================
+   CUSTOM SCROLLBAR
+   ========================================== */
+
 ::-webkit-scrollbar {
   width: 8px;
 }
 
 ::-webkit-scrollbar-track {
-  background: var(--navy-900);
+  background: var(--bg-primary);
 }
 
 ::-webkit-scrollbar-thumb {
-  background: var(--navy-800);
+  background: var(--bg-secondary);
   border-radius: 4px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: #1a2f4a;
+  background: var(--bg-tertiary);
 }
 
-/* Toast animation */
+/* ==========================================
+   ANIMATIONS
+   ========================================== */
+
 @keyframes slide-in {
   from {
     transform: translateX(100%);

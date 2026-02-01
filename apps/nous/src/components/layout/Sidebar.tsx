@@ -11,16 +11,21 @@ import {
   HelpCircle,
   Settings,
   X,
+  PanelLeftClose,
+  PanelLeft,
 } from 'lucide-react'
 import { ViewSwitcher } from './ViewSwitcher'
 import { useCurrentView } from '@/hooks/useCurrentView'
 import { agentNavigation, adminNavigation, NavSection, NavItem } from '@/config/navigation'
 import { supabase } from '@/lib/supabase'
 import { cn } from '@/lib/utils'
+import { useTheme } from '@/contexts/ThemeContext'
 
 export default function Sidebar() {
   const pathname = usePathname()
   const { currentView, isAdmin, loading } = useCurrentView()
+  const { sidebarStyle, setSidebarStyle } = useTheme()
+  const isCollapsed = sidebarStyle === 'collapsed'
   const [expandedSections, setExpandedSections] = useState<string[]>(['norx', 'norv', 'norw', 'system'])
   const [pinnedItems, setPinnedItems] = useState<string[]>([])
 
@@ -96,7 +101,10 @@ export default function Sidebar() {
 
   if (loading) {
     return (
-      <aside className="w-64 bg-navy-800 border-r border-white/10 flex flex-col h-screen">
+      <aside className={cn(
+        "sidebar-container bg-navy-800 border-r border-white/10 flex flex-col h-screen transition-all duration-300",
+        isCollapsed ? "w-16" : "w-64"
+      )}>
         <div className="p-4">
           <div className="h-8 bg-navy-700 rounded animate-pulse" />
         </div>
@@ -105,54 +113,81 @@ export default function Sidebar() {
   }
 
   return (
-    <aside className="w-64 bg-navy-800 border-r border-white/10 flex flex-col h-screen">
+    <aside className={cn(
+      "sidebar-container bg-navy-800 border-r border-white/10 flex flex-col h-screen transition-all duration-300",
+      isCollapsed ? "w-16" : "w-64"
+    )}>
       {/* Logo */}
-      <div className="p-4 border-b border-white/10">
+      <div className={cn("border-b border-white/10", isCollapsed ? "p-2" : "p-4")}>
         <Link href="/" className="flex items-center gap-2">
-          <div className="w-8 h-8 bg-gold-500 rounded-lg flex items-center justify-center">
+          <div className="w-8 h-8 bg-gold-500 rounded-lg flex items-center justify-center flex-shrink-0">
             <span className="text-navy-900 font-bold text-sm">HN</span>
           </div>
-          <div>
-            <div className="font-semibold text-white">HomeNest</div>
-            <div className="text-xs text-white/50">Nous</div>
-          </div>
+          {!isCollapsed && (
+            <div className="sidebar-logo-text">
+              <div className="font-semibold text-white">HomeNest</div>
+              <div className="text-xs text-white/50">Nous</div>
+            </div>
+          )}
         </Link>
       </div>
+      
+      {/* Collapse Toggle Button */}
+      <button
+        onClick={() => setSidebarStyle(isCollapsed ? 'expanded' : 'collapsed')}
+        className={cn(
+          "p-2 hover:bg-white/5 transition-colors",
+          isCollapsed ? "mx-auto my-2" : "absolute top-4 right-2"
+        )}
+        title={isCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+      >
+        {isCollapsed ? (
+          <PanelLeft className="w-4 h-4 text-white/40 hover:text-white" />
+        ) : (
+          <PanelLeftClose className="w-4 h-4 text-white/40 hover:text-white" />
+        )}
+      </button>
 
       {/* View Switcher */}
-      {isAdmin && <ViewSwitcher />}
+      {isAdmin && !isCollapsed && <ViewSwitcher />}
 
       {/* View Indicator */}
-      <div className="px-4 py-2">
-        <div className={cn(
-          "text-xs font-medium px-2 py-1 rounded",
-          currentView === 'admin' 
-            ? 'bg-norv/20 text-norv' 
-            : 'bg-white/10 text-white/60'
-        )}>
-          {currentView === 'admin' ? '⚙️ Setup & Configure' : '👤 Tools & Features'}
+      {!isCollapsed && (
+        <div className="px-4 py-2">
+          <div className={cn(
+            "text-xs font-medium px-2 py-1 rounded",
+            currentView === 'admin' 
+              ? 'bg-norv/20 text-norv' 
+              : 'bg-white/10 text-white/60'
+          )}>
+            {currentView === 'admin' ? '⚙️ Setup & Configure' : '👤 Tools & Features'}
+          </div>
         </div>
-      </div>
+      )}
 
       {/* Quick Access (Pinned) - Agent View Only */}
       {pinnedItemsData.length > 0 && currentView === 'agent' && (
-        <div className="px-3 py-2 border-b border-white/10">
-          <div className="text-xs font-medium text-white/40 uppercase tracking-wider mb-2 px-2">
-            Quick Access
-          </div>
+        <div className={cn("border-b border-white/10", isCollapsed ? "px-1 py-2" : "px-3 py-2")}>
+          {!isCollapsed && (
+            <div className="text-xs font-medium text-white/40 uppercase tracking-wider mb-2 px-2 sidebar-section-title">
+              Quick Access
+            </div>
+          )}
           {pinnedItemsData.map(item => (
             <Link
               key={item.key}
               href={item.href}
               className={cn(
-                "flex items-center gap-2 px-2 py-1.5 rounded-md text-sm transition-colors",
+                "flex items-center rounded-md text-sm transition-colors",
+                isCollapsed ? "justify-center p-2" : "gap-2 px-2 py-1.5",
                 pathname === item.href
                   ? 'bg-norv/20 text-norv'
                   : 'text-white/60 hover:text-white hover:bg-white/5'
               )}
+              title={isCollapsed ? item.label : undefined}
             >
-              <item.icon className="w-4 h-4" />
-              <span>{item.label}</span>
+              <item.icon className="w-4 h-4 flex-shrink-0" />
+              {!isCollapsed && <span className="sidebar-label">{item.label}</span>}
             </Link>
           ))}
         </div>
@@ -162,44 +197,57 @@ export default function Sidebar() {
       <nav className="flex-1 overflow-y-auto py-2">
         {navigation.map(section => (
           <div key={section.key} className="mb-2">
-            <button
-              onClick={() => toggleSection(section.key)}
-              className="w-full flex items-center justify-between px-4 py-2 text-xs font-medium text-white/40 uppercase tracking-wider hover:text-white/60"
-            >
-              <div className="flex items-center gap-2">
+            {isCollapsed ? (
+              // Collapsed: Just show a colored dot as section indicator
+              <div className="flex justify-center py-2">
                 <div 
                   className="w-2 h-2 rounded-full" 
                   style={{ backgroundColor: section.color }}
+                  title={section.label}
                 />
-                <span>{section.label}</span>
               </div>
-              <ChevronDown 
-                className={cn(
-                  "w-4 h-4 transition-transform",
-                  expandedSections.includes(section.key) ? '' : '-rotate-90'
-                )}
-              />
-            </button>
+            ) : (
+              <button
+                onClick={() => toggleSection(section.key)}
+                className="w-full flex items-center justify-between px-4 py-2 text-xs font-medium text-white/40 uppercase tracking-wider hover:text-white/60 sidebar-section-title"
+              >
+                <div className="flex items-center gap-2">
+                  <div 
+                    className="w-2 h-2 rounded-full" 
+                    style={{ backgroundColor: section.color }}
+                  />
+                  <span>{section.label}</span>
+                </div>
+                <ChevronDown 
+                  className={cn(
+                    "w-4 h-4 transition-transform",
+                    expandedSections.includes(section.key) ? '' : '-rotate-90'
+                  )}
+                />
+              </button>
+            )}
 
-            {expandedSections.includes(section.key) && (
-              <div className="mt-1 space-y-0.5 px-2">
+            {(isCollapsed || expandedSections.includes(section.key)) && (
+              <div className={cn("mt-1 space-y-0.5", isCollapsed ? "px-1" : "px-2")}>
                 {section.items.map(item => (
                   <div key={item.key} className="group flex items-center">
                     <Link
                       href={item.href}
                       className={cn(
-                        "flex-1 flex items-center gap-2 px-3 py-2 rounded-md text-sm transition-colors",
+                        "flex-1 flex items-center rounded-md text-sm transition-colors",
+                        isCollapsed ? "justify-center p-2" : "gap-2 px-3 py-2",
                         pathname === item.href
                           ? 'bg-norv/20 text-norv'
                           : 'text-white/60 hover:text-white hover:bg-white/5'
                       )}
+                      title={isCollapsed ? item.label : undefined}
                     >
-                      <item.icon className="w-4 h-4" />
-                      <span>{item.label}</span>
+                      <item.icon className="w-4 h-4 flex-shrink-0" />
+                      {!isCollapsed && <span className="sidebar-label">{item.label}</span>}
                     </Link>
                     
-                    {/* Pin button (agent view only) */}
-                    {currentView === 'agent' && (
+                    {/* Pin button (agent view only, expanded only) */}
+                    {currentView === 'agent' && !isCollapsed && (
                       <button
                         onClick={() => togglePin(item)}
                         className="opacity-0 group-hover:opacity-100 p-1 hover:bg-white/10 rounded transition-opacity"
@@ -221,31 +269,44 @@ export default function Sidebar() {
       </nav>
 
       {/* Footer */}
-      <div className="p-3 border-t border-white/10">
+      <div className={cn("border-t border-white/10", isCollapsed ? "p-2" : "p-3")}>
         <Link
-          href="/settings"
-          className="flex items-center gap-2 px-3 py-2 rounded-lg text-sm text-white/60 hover:bg-white/5"
+          href="/admin/settings"
+          className={cn(
+            "flex items-center rounded-lg text-sm text-white/60 hover:bg-white/5 transition-colors",
+            isCollapsed ? "justify-center p-2" : "gap-2 px-3 py-2"
+          )}
+          title={isCollapsed ? 'Settings' : undefined}
         >
-          <Settings size={18} />
-          <span>Settings</span>
+          <Settings size={18} className="flex-shrink-0" />
+          {!isCollapsed && <span className="sidebar-label">Settings</span>}
         </Link>
         <Link
           href="/help"
-          className="flex items-center gap-2 px-3 py-2 rounded-lg text-sm text-white/60 hover:bg-white/5"
+          className={cn(
+            "flex items-center rounded-lg text-sm text-white/60 hover:bg-white/5 transition-colors",
+            isCollapsed ? "justify-center p-2" : "gap-2 px-3 py-2"
+          )}
+          title={isCollapsed ? 'Help & Support' : undefined}
         >
-          <HelpCircle size={18} />
-          <span>Help & Support</span>
+          <HelpCircle size={18} className="flex-shrink-0" />
+          {!isCollapsed && <span className="sidebar-label">Help & Support</span>}
         </Link>
 
         {/* User */}
-        <div className="mt-3 flex items-center gap-2 px-3 py-2">
-          <div className="w-8 h-8 bg-norv/20 rounded-full flex items-center justify-center text-norv text-sm font-medium">
+        <div className={cn(
+          "mt-3 flex items-center",
+          isCollapsed ? "justify-center p-2" : "gap-2 px-3 py-2"
+        )}>
+          <div className="w-8 h-8 bg-norv/20 rounded-full flex items-center justify-center text-norv text-sm font-medium flex-shrink-0">
             SS
           </div>
-          <div>
-            <div className="text-sm text-white">Suzanna</div>
-            <div className="text-xs text-white/40">Agent</div>
-          </div>
+          {!isCollapsed && (
+            <div className="sidebar-label">
+              <div className="text-sm text-white">Suzanna</div>
+              <div className="text-xs text-white/40">Agent</div>
+            </div>
+          )}
         </div>
       </div>
     </aside>

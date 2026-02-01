@@ -6,8 +6,9 @@ import { createBrowserClient } from '@supabase/ssr'
 import { 
   ArrowLeft, Save, Key, Bell, Globe, Palette, Bot, 
   CheckCircle, AlertCircle, Eye, EyeOff, Sparkles,
-  MessageSquare, Phone, FileText, GraduationCap, HelpCircle
+  MessageSquare, Phone, FileText, GraduationCap, HelpCircle, Check
 } from 'lucide-react'
+import { useTheme, ACCENT_COLORS } from '@/contexts/ThemeContext'
 
 interface ApiKey {
   id: string
@@ -640,61 +641,190 @@ export default function SettingsPage() {
 
           {/* Appearance Tab */}
           {activeTab === 'appearance' && (
-            <div className="space-y-6">
-              <div>
-                <h2 className="text-lg font-medium text-white mb-4">Appearance</h2>
-                <p className="text-white/60 text-sm">Customize the platform appearance.</p>
-              </div>
-
-              <div className="space-y-4">
-                <div>
-                  <label className="block text-sm font-medium text-white/80 mb-2">Theme</label>
-                  <div className="flex gap-3">
-                    <button className="px-4 py-2 bg-norv/20 text-norv rounded-lg border-2 border-norv">
-                      Dark
-                    </button>
-                    <button className="px-4 py-2 bg-navy-900 text-white/60 rounded-lg border-2 border-transparent hover:border-white/20">
-                      Light
-                    </button>
-                  </div>
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-white/80 mb-2">Accent Color</label>
-                  <div className="flex gap-2">
-                    <button className="w-8 h-8 rounded-full bg-[#00A6FB] ring-2 ring-offset-2 ring-offset-navy-800 ring-norv" />
-                    <button className="w-8 h-8 rounded-full bg-purple-500" />
-                    <button className="w-8 h-8 rounded-full bg-green-500" />
-                    <button className="w-8 h-8 rounded-full bg-amber-500" />
-                    <button className="w-8 h-8 rounded-full bg-pink-500" />
-                  </div>
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-white/80 mb-2">Sidebar Style</label>
-                  <div className="flex gap-3">
-                    <button className="px-4 py-2 bg-norv/20 text-norv rounded-lg border-2 border-norv">
-                      Expanded
-                    </button>
-                    <button className="px-4 py-2 bg-navy-900 text-white/60 rounded-lg border-2 border-transparent hover:border-white/20">
-                      Collapsed
-                    </button>
-                  </div>
-                </div>
-              </div>
-
-              <button 
-                onClick={handleSave}
-                disabled={saving}
-                className="flex items-center gap-2 px-4 py-2 bg-norv hover:bg-norv/80 text-white rounded-lg transition-colors disabled:opacity-50"
-              >
-                <Save className="w-4 h-4" />
-                Save Appearance
-              </button>
-            </div>
+            <AppearanceTab />
           )}
         </div>
       </div>
+    </div>
+  )
+}
+
+// Separate component for Appearance tab to use the theme hook
+function AppearanceTab() {
+  const { theme, setTheme, accentColor, setAccentColor, sidebarStyle, setSidebarStyle } = useTheme()
+  const [saved, setSaved] = useState(false)
+
+  const accentColors = [
+    { id: 'cyan' as const, color: '#00A6FB', name: 'Cyan' },
+    { id: 'purple' as const, color: '#8B5CF6', name: 'Purple' },
+    { id: 'green' as const, color: '#10B981', name: 'Green' },
+    { id: 'amber' as const, color: '#F59E0B', name: 'Amber' },
+    { id: 'pink' as const, color: '#EC4899', name: 'Pink' },
+  ]
+
+  const handleSave = () => {
+    setSaved(true)
+    setTimeout(() => setSaved(false), 2000)
+  }
+
+  return (
+    <div className="space-y-6">
+      <div>
+        <h2 className="text-lg font-medium text-white mb-4">Appearance</h2>
+        <p className="text-white/60 text-sm">Customize the platform appearance. Changes are applied immediately and saved to your browser.</p>
+      </div>
+
+      {saved && (
+        <div className="flex items-center gap-2 p-3 bg-green-500/20 border border-green-500/50 rounded-lg text-green-400">
+          <CheckCircle className="w-4 h-4" />
+          Appearance settings saved!
+        </div>
+      )}
+
+      <div className="space-y-6">
+        {/* Theme Selection */}
+        <div>
+          <label className="block text-sm font-medium text-white/80 mb-3">Theme</label>
+          <div className="flex gap-3">
+            <button
+              onClick={() => setTheme('dark')}
+              className={`flex-1 p-4 rounded-lg border-2 transition-all ${
+                theme === 'dark'
+                  ? 'bg-norv/20 border-norv'
+                  : 'bg-navy-900 border-transparent hover:border-white/20'
+              }`}
+            >
+              <div className="flex items-center justify-between mb-3">
+                <span className={theme === 'dark' ? 'text-norv font-medium' : 'text-white/60'}>Dark</span>
+                {theme === 'dark' && <Check className="w-4 h-4 text-norv" />}
+              </div>
+              <div className="h-20 rounded-lg bg-[#0A1628] border border-white/10 p-2">
+                <div className="w-8 h-2 bg-white/20 rounded mb-1" />
+                <div className="w-12 h-2 bg-white/10 rounded mb-1" />
+                <div className="w-6 h-2 bg-norv/50 rounded" />
+              </div>
+            </button>
+
+            <button
+              onClick={() => setTheme('light')}
+              className={`flex-1 p-4 rounded-lg border-2 transition-all ${
+                theme === 'light'
+                  ? 'bg-norv/20 border-norv'
+                  : 'bg-navy-900 border-transparent hover:border-white/20'
+              }`}
+            >
+              <div className="flex items-center justify-between mb-3">
+                <span className={theme === 'light' ? 'text-norv font-medium' : 'text-white/60'}>Light</span>
+                {theme === 'light' && <Check className="w-4 h-4 text-norv" />}
+              </div>
+              <div className="h-20 rounded-lg bg-[#f8fafc] border border-black/10 p-2">
+                <div className="w-8 h-2 bg-black/20 rounded mb-1" />
+                <div className="w-12 h-2 bg-black/10 rounded mb-1" />
+                <div className="w-6 h-2 bg-norv/50 rounded" />
+              </div>
+            </button>
+          </div>
+        </div>
+
+        {/* Accent Color Selection */}
+        <div>
+          <label className="block text-sm font-medium text-white/80 mb-3">Accent Color</label>
+          <div className="flex gap-3">
+            {accentColors.map((color) => (
+              <button
+                key={color.id}
+                onClick={() => setAccentColor(color.id)}
+                className={`relative w-12 h-12 rounded-full transition-transform hover:scale-110 ${
+                  accentColor === color.id ? 'ring-2 ring-offset-2 ring-offset-navy-800' : ''
+                }`}
+                style={{ 
+                  backgroundColor: color.color,
+                  ringColor: accentColor === color.id ? color.color : undefined
+                }}
+                title={color.name}
+              >
+                {accentColor === color.id && (
+                  <Check className="absolute inset-0 m-auto w-5 h-5 text-white" />
+                )}
+              </button>
+            ))}
+          </div>
+          <p className="text-xs text-white/40 mt-2">
+            Current: <span className="capitalize">{accentColor}</span> - Used for buttons, links, and highlights
+          </p>
+        </div>
+
+        {/* Sidebar Style Selection */}
+        <div>
+          <label className="block text-sm font-medium text-white/80 mb-3">Sidebar Style</label>
+          <div className="flex gap-3">
+            <button
+              onClick={() => setSidebarStyle('expanded')}
+              className={`flex-1 p-4 rounded-lg border-2 transition-all ${
+                sidebarStyle === 'expanded'
+                  ? 'bg-norv/20 border-norv'
+                  : 'bg-navy-900 border-transparent hover:border-white/20'
+              }`}
+            >
+              <div className="flex items-center justify-between mb-3">
+                <span className={sidebarStyle === 'expanded' ? 'text-norv font-medium' : 'text-white/60'}>Expanded</span>
+                {sidebarStyle === 'expanded' && <Check className="w-4 h-4 text-norv" />}
+              </div>
+              <div className="h-16 rounded-lg bg-navy-800 border border-white/10 flex">
+                <div className="w-16 bg-white/5 border-r border-white/10 p-2">
+                  <div className="w-full h-2 bg-white/20 rounded mb-1" />
+                  <div className="w-full h-2 bg-white/10 rounded mb-1" />
+                  <div className="w-full h-2 bg-white/10 rounded" />
+                </div>
+                <div className="flex-1 p-2">
+                  <div className="w-full h-2 bg-white/10 rounded" />
+                </div>
+              </div>
+              <p className="text-xs text-white/40 mt-2">Full sidebar with labels</p>
+            </button>
+
+            <button
+              onClick={() => setSidebarStyle('collapsed')}
+              className={`flex-1 p-4 rounded-lg border-2 transition-all ${
+                sidebarStyle === 'collapsed'
+                  ? 'bg-norv/20 border-norv'
+                  : 'bg-navy-900 border-transparent hover:border-white/20'
+              }`}
+            >
+              <div className="flex items-center justify-between mb-3">
+                <span className={sidebarStyle === 'collapsed' ? 'text-norv font-medium' : 'text-white/60'}>Collapsed</span>
+                {sidebarStyle === 'collapsed' && <Check className="w-4 h-4 text-norv" />}
+              </div>
+              <div className="h-16 rounded-lg bg-navy-800 border border-white/10 flex">
+                <div className="w-8 bg-white/5 border-r border-white/10 p-1">
+                  <div className="w-full h-2 bg-white/20 rounded mb-1" />
+                  <div className="w-full h-2 bg-white/10 rounded mb-1" />
+                  <div className="w-full h-2 bg-white/10 rounded" />
+                </div>
+                <div className="flex-1 p-2">
+                  <div className="w-full h-2 bg-white/10 rounded" />
+                </div>
+              </div>
+              <p className="text-xs text-white/40 mt-2">Icons only, more space</p>
+            </button>
+          </div>
+        </div>
+
+        {/* Preview Note */}
+        <div className="p-4 bg-blue-500/10 border border-blue-500/30 rounded-lg">
+          <p className="text-blue-400 text-sm">
+            <strong>Note:</strong> Theme changes are applied immediately. Your preferences are saved to your browser and will persist across sessions.
+          </p>
+        </div>
+      </div>
+
+      <button 
+        onClick={handleSave}
+        className="flex items-center gap-2 px-4 py-2 bg-norv hover:bg-norv/80 text-white rounded-lg transition-colors"
+      >
+        <Save className="w-4 h-4" />
+        Save Appearance
+      </button>
     </div>
   )
 }
