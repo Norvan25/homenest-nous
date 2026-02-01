@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { supabase } from '@/lib/supabase'
+import { createBrowserClient } from '@supabase/ssr'
 import { LogIn, Eye, EyeOff, AlertCircle } from 'lucide-react'
 
 export default function LoginPage() {
@@ -13,6 +13,12 @@ export default function LoginPage() {
   const [error, setError] = useState<string | null>(null)
   
   const router = useRouter()
+  
+  // Create browser client for proper cookie handling
+  const supabase = createBrowserClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+  )
 
   async function handleLogin(e: React.FormEvent) {
     e.preventDefault()
@@ -20,30 +26,38 @@ export default function LoginPage() {
     setError(null)
 
     try {
+      console.log('Attempting login for:', email)
+      
       const { data, error: signInError } = await supabase.auth.signInWithPassword({
         email,
         password
       })
 
+      console.log('Login response:', { data, signInError })
+
       if (signInError) {
         throw signInError
       }
 
-      // Log the login
-      try {
-        await (supabase.from('login_logs') as any).insert({
-          user_id: data.user?.id,
-          email: email,
-          event_type: 'login',
-          success: true
-        })
-      } catch (e) {
-        // Non-critical, continue
+      if (!data.session) {
+        throw new Error('No session returned')
       }
+
+      console.log('Login successful, redirecting...')
+
+      // Log the login (non-blocking)
+      supabase.from('login_logs').insert({
+        user_id: data.user?.id,
+        email: email,
+        event_type: 'login',
+        success: true
+      }).then(() => {}).catch(() => {})
 
       router.push('/')
       router.refresh()
     } catch (err: any) {
+      console.error('Login error:', err)
+      
       // Translate Supabase errors to user-friendly messages
       let errorMessage = 'Failed to sign in'
       const errorCode = err.message?.toLowerCase() || ''
@@ -64,17 +78,13 @@ export default function LoginPage() {
       
       setError(errorMessage)
       
-      // Log failed attempt
-      try {
-        await (supabase.from('login_logs') as any).insert({
-          email: email,
-          event_type: 'login',
-          success: false,
-          failure_reason: err.message
-        })
-      } catch (e) {
-        // Non-critical
-      }
+      // Log failed attempt (non-blocking)
+      supabase.from('login_logs').insert({
+        email: email,
+        event_type: 'login',
+        success: false,
+        failure_reason: err.message
+      }).then(() => {}).catch(() => {})
     } finally {
       setLoading(false)
     }

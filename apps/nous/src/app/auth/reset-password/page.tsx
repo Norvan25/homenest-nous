@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { supabase } from '@/lib/supabase'
+import { createBrowserClient } from '@supabase/ssr'
 import { Key, Eye, EyeOff, CheckCircle, AlertCircle } from 'lucide-react'
 
 export default function ResetPasswordPage() {
@@ -14,6 +14,12 @@ export default function ResetPasswordPage() {
   const [success, setSuccess] = useState(false)
   
   const router = useRouter()
+  
+  // Create browser client for proper cookie handling
+  const supabase = createBrowserClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+  )
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
