@@ -46,12 +46,12 @@ export default function LoginPage() {
       console.log('Login successful, redirecting...')
 
       // Log the login (non-blocking)
-      supabase.from('login_logs').insert({
+      void supabase.from('login_logs').insert({
         user_id: data.user?.id,
         email: email,
         event_type: 'login',
         success: true
-      }).then(() => {}).catch(() => {})
+      })
 
       router.push('/')
       router.refresh()
@@ -79,12 +79,12 @@ export default function LoginPage() {
       setError(errorMessage)
       
       // Log failed attempt (non-blocking)
-      supabase.from('login_logs').insert({
+      void supabase.from('login_logs').insert({
         email: email,
         event_type: 'login',
         success: false,
         failure_reason: err.message
-      }).then(() => {}).catch(() => {})
+      })
     } finally {
       setLoading(false)
     }
