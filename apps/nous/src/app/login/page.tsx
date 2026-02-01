@@ -44,7 +44,25 @@ export default function LoginPage() {
       router.push('/')
       router.refresh()
     } catch (err: any) {
-      setError(err.message || 'Failed to sign in')
+      // Translate Supabase errors to user-friendly messages
+      let errorMessage = 'Failed to sign in'
+      const errorCode = err.message?.toLowerCase() || ''
+      
+      if (errorCode.includes('invalid login credentials')) {
+        errorMessage = 'Invalid email or password. Please check your credentials and try again.'
+      } else if (errorCode.includes('email not confirmed')) {
+        errorMessage = 'Please verify your email address before signing in.'
+      } else if (errorCode.includes('user not found') || errorCode.includes('no user')) {
+        errorMessage = 'No account found with this email. Please contact your administrator.'
+      } else if (errorCode.includes('too many requests')) {
+        errorMessage = 'Too many login attempts. Please wait a few minutes and try again.'
+      } else if (errorCode.includes('network') || errorCode.includes('fetch')) {
+        errorMessage = 'Network error. Please check your connection and try again.'
+      } else if (err.message) {
+        errorMessage = err.message
+      }
+      
+      setError(errorMessage)
       
       // Log failed attempt
       try {
