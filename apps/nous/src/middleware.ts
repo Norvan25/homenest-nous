@@ -1,38 +1,51 @@
-import { createMiddlewareClient } from '@supabase/auth-helpers-nextjs'
+import { createServerClient } from '@supabase/ssr'
 import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
 
 export async function middleware(req: NextRequest) {
-  const res = NextResponse.next()
-  
-  // Skip auth check for development - comment out these lines in production
-  // return res
-  
-  try {
-    const supabase = createMiddlewareClient({ req, res })
-    
-    const {
-      data: { session },
-    } = await supabase.auth.getSession()
+  let res = NextResponse.next({
+    request: {
+      headers: req.headers,
+    },
+  })
 
-    // Protect all routes except /login and api routes
-    const isLoginPage = req.nextUrl.pathname.startsWith('/login')
-    const isApiRoute = req.nextUrl.pathname.startsWith('/api')
-    
-    if (!session && !isLoginPage && !isApiRoute) {
-      const redirectUrl = new URL('/login', req.url)
-      return NextResponse.redirect(redirectUrl)
+  const supabase = createServerClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    {
+      cookies: {
+        getAll() {
+          return req.cookies.getAll()
+        },
+        setAll(cookiesToSet) {
+          cookiesToSet.forEach(({ name, value }) => {
+            req.cookies.set(name, value)
+          })
+          res = NextResponse.next({
+            request: {
+              headers: req.headers,
+            },
+          })
+          cookiesToSet.forEach(({ name, value, options }) => {
+            res.cookies.set(name, value, options)
+          })
+        },
+      },
     }
+  )
 
-    // Redirect logged in users away from login page
-    if (session && isLoginPage) {
-      const redirectUrl = new URL('/', req.url)
-      return NextResponse.redirect(redirectUrl)
-    }
-  } catch (error) {
-    // If there's an error with auth, allow the request through
-    // This prevents app from breaking if Supabase is misconfigured
-    console.error('Middleware auth error:', error)
+  const { data: { session } } = await supabase.auth.getSession()
+
+  // Protect all routes except /login
+  if (!session && !req.nextUrl.pathname.startsWith('/login')) {
+    const redirectUrl = new URL('/login', req.url)
+    return NextResponse.redirect(redirectUrl)
+  }
+
+  // Redirect logged in users away from login page
+  if (session && req.nextUrl.pathname.startsWith('/login')) {
+    const redirectUrl = new URL('/', req.url)
+    return NextResponse.redirect(redirectUrl)
   }
 
   return res
@@ -40,13 +53,6 @@ export async function middleware(req: NextRequest) {
 
 export const config = {
   matcher: [
-    /*
-     * Match all request paths except:
-     * - _next/static (static files)
-     * - _next/image (image optimization files)
-     * - favicon.ico (favicon file)
-     * - public folder
-     */
-    '/((?!_next/static|_next/image|favicon.ico|public).*)',
+    '/((?!_next/static|_next/image|favicon.ico|public|api).*)',
   ],
 }
