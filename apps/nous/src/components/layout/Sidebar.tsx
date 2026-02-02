@@ -27,7 +27,7 @@ import { createBrowserClient } from '@supabase/ssr'
 export default function Sidebar() {
   const pathname = usePathname()
   const router = useRouter()
-  const { currentView, isAdmin, loading } = useCurrentView()
+  const { currentView, isAdmin, loading, userName, userRole } = useCurrentView()
   const { sidebarStyle, setSidebarStyle } = useTheme()
   const isCollapsed = sidebarStyle === 'collapsed'
   const [expandedSections, setExpandedSections] = useState<string[]>(['norx', 'norv', 'norw', 'system'])
@@ -43,6 +43,10 @@ export default function Sidebar() {
   async function handleLogout() {
     setLoggingOut(true)
     try {
+      // Clear stored role/view preferences
+      localStorage.removeItem('homenest_current_view')
+      localStorage.removeItem('homenest_user_role')
+      
       await supabaseAuth.auth.signOut()
       router.push('/login')
       router.refresh()
@@ -294,17 +298,20 @@ export default function Sidebar() {
 
       {/* Footer */}
       <div className={cn("border-t border-white/10", isCollapsed ? "p-2" : "p-3")}>
-        <Link
-          href="/admin/settings"
-          className={cn(
-            "flex items-center rounded-lg text-sm text-white/60 hover:bg-white/5 transition-colors",
-            isCollapsed ? "justify-center p-2" : "gap-2 px-3 py-2"
-          )}
-          title={isCollapsed ? 'Settings' : undefined}
-        >
-          <Settings size={18} className="flex-shrink-0" />
-          {!isCollapsed && <span className="sidebar-label">Settings</span>}
-        </Link>
+        {/* Settings - only show admin settings for admins */}
+        {isAdmin && (
+          <Link
+            href="/admin/settings"
+            className={cn(
+              "flex items-center rounded-lg text-sm text-white/60 hover:bg-white/5 transition-colors",
+              isCollapsed ? "justify-center p-2" : "gap-2 px-3 py-2"
+            )}
+            title={isCollapsed ? 'Settings' : undefined}
+          >
+            <Settings size={18} className="flex-shrink-0" />
+            {!isCollapsed && <span className="sidebar-label">Settings</span>}
+          </Link>
+        )}
         <Link
           href="/help"
           className={cn(
@@ -323,12 +330,12 @@ export default function Sidebar() {
           isCollapsed ? "justify-center p-2" : "gap-2 px-3 py-2"
         )}>
           <div className="w-8 h-8 bg-norv/20 rounded-full flex items-center justify-center text-norv text-sm font-medium flex-shrink-0">
-            SS
+            {userName ? userName.slice(0, 2).toUpperCase() : 'U'}
           </div>
           {!isCollapsed && (
             <div className="sidebar-label flex-1">
-              <div className="text-sm text-white">Suzanna</div>
-              <div className="text-xs text-white/40">Agent</div>
+              <div className="text-sm text-white">{userName || 'User'}</div>
+              <div className="text-xs text-white/40 capitalize">{userRole.replace('_', ' ')}</div>
             </div>
           )}
         </div>
