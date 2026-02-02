@@ -13,21 +13,45 @@ import {
   X,
   PanelLeftClose,
   PanelLeft,
+  LogOut,
 } from 'lucide-react'
 import { ViewSwitcher } from './ViewSwitcher'
+import { useRouter } from 'next/navigation'
 import { useCurrentView } from '@/hooks/useCurrentView'
 import { agentNavigation, adminNavigation, NavSection, NavItem } from '@/config/navigation'
 import { supabase } from '@/lib/supabase'
 import { cn } from '@/lib/utils'
 import { useTheme } from '@/contexts/ThemeContext'
+import { createBrowserClient } from '@supabase/ssr'
 
 export default function Sidebar() {
   const pathname = usePathname()
+  const router = useRouter()
   const { currentView, isAdmin, loading } = useCurrentView()
   const { sidebarStyle, setSidebarStyle } = useTheme()
   const isCollapsed = sidebarStyle === 'collapsed'
   const [expandedSections, setExpandedSections] = useState<string[]>(['norx', 'norv', 'norw', 'system'])
   const [pinnedItems, setPinnedItems] = useState<string[]>([])
+  const [loggingOut, setLoggingOut] = useState(false)
+
+  // Create supabase client for auth
+  const supabaseAuth = createBrowserClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+  )
+
+  async function handleLogout() {
+    setLoggingOut(true)
+    try {
+      await supabaseAuth.auth.signOut()
+      router.push('/login')
+      router.refresh()
+    } catch (error) {
+      console.error('Logout error:', error)
+    } finally {
+      setLoggingOut(false)
+    }
+  }
 
   // Load pinned items
   useEffect(() => {
@@ -302,12 +326,30 @@ export default function Sidebar() {
             SS
           </div>
           {!isCollapsed && (
-            <div className="sidebar-label">
+            <div className="sidebar-label flex-1">
               <div className="text-sm text-white">Suzanna</div>
               <div className="text-xs text-white/40">Agent</div>
             </div>
           )}
         </div>
+
+        {/* Logout Button */}
+        <button
+          onClick={handleLogout}
+          disabled={loggingOut}
+          className={cn(
+            "flex items-center rounded-lg text-sm text-red-400 hover:bg-red-500/10 transition-colors mt-2",
+            isCollapsed ? "justify-center p-2 w-full" : "gap-2 px-3 py-2 w-full"
+          )}
+          title={isCollapsed ? 'Logout' : undefined}
+        >
+          {loggingOut ? (
+            <div className="w-4 h-4 border-2 border-red-400/30 border-t-red-400 rounded-full animate-spin" />
+          ) : (
+            <LogOut size={18} className="flex-shrink-0" />
+          )}
+          {!isCollapsed && <span className="sidebar-label">{loggingOut ? 'Logging out...' : 'Logout'}</span>}
+        </button>
       </div>
     </aside>
   )
