@@ -197,8 +197,8 @@ export function LeadDetailPanel({ lead, onClose, onUpdate, onRemoveFromCRM, onDe
   // Save lead changes
   const handleSave = async () => {
     setIsSaving(true)
-    const { data, error } = await (supabase
-      .from('crm_leads') as any)
+    const { data, error } = await supabase
+      .from('crm_leads')
       .update({
         status,
         priority,
