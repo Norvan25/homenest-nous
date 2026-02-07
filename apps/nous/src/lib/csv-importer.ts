@@ -281,7 +281,7 @@ export async function importCSVData(
           for (const c of insertedContacts) {
             if (c.is_decision_maker && c.property_id) {
               // Reverse lookup: property_id → vortex_id → contactIdMap
-              for (const [vid, pid] of propIdMap.entries()) {
+              for (const [vid, pid] of Array.from(propIdMap.entries())) {
                 if (pid === c.property_id) {
                   contactIdMap.set(vid, c.id)
                   break
