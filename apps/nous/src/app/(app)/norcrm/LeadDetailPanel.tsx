@@ -200,8 +200,8 @@ export function LeadDetailPanel({ lead, onClose, onUpdate, onRemoveFromCRM, onDe
     const { data, error } = await supabase
       .from('crm_leads')
       .update({
-        status,
-        priority,
+        status: status as any,
+        priority: priority as any,
         next_action: nextAction || null,
         next_action_date: nextActionDate || null,
         updated_at: new Date().toISOString()
