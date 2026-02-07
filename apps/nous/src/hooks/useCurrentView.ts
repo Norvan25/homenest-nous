@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { createBrowserClient } from '@supabase/ssr'
+import { supabase } from '@/lib/supabase'
 
 export type ViewMode = 'admin' | 'agent'
 export type UserRole = 'super_admin' | 'admin' | 'agent'
@@ -30,11 +30,6 @@ export function useCurrentView(): ViewState {
   useEffect(() => {
     async function load() {
       try {
-        const supabase = createBrowserClient(
-          process.env.NEXT_PUBLIC_SUPABASE_URL!,
-          process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-        )
-
         // Get authenticated user
         const { data: { user }, error: userError } = await supabase.auth.getUser()
         

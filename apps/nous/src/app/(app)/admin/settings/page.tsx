@@ -9,6 +9,7 @@ import {
   MessageSquare, Phone, FileText, GraduationCap, HelpCircle, Check
 } from 'lucide-react'
 import { useTheme, ACCENT_COLORS } from '@/contexts/ThemeContext'
+import { useCurrentView } from '@/hooks/useCurrentView'
 
 interface ApiKey {
   id: string
@@ -45,7 +46,8 @@ const AI_SCENARIOS = [
 ]
 
 export default function SettingsPage() {
-  const [activeTab, setActiveTab] = useState('api')
+  const { isSuperAdmin, userRole } = useCurrentView()
+  const [activeTab, setActiveTab] = useState(isSuperAdmin ? 'api' : 'notifications')
   const [saving, setSaving] = useState(false)
   const [saveSuccess, setSaveSuccess] = useState(false)
   const [showKeys, setShowKeys] = useState<Record<string, boolean>>({})
@@ -134,24 +136,29 @@ export default function SettingsPage() {
       <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
         {/* Sidebar */}
         <div className="bg-navy-800/50 border border-white/10 rounded-lg p-2 h-fit">
-          <button
-            onClick={() => setActiveTab('api')}
-            className={`w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm transition-colors ${
-              activeTab === 'api' ? 'bg-norv/20 text-norv' : 'text-white/60 hover:text-white hover:bg-white/5'
-            }`}
-          >
-            <Key className="w-4 h-4" />
-            API Keys
-          </button>
-          <button
-            onClick={() => setActiveTab('models')}
-            className={`w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm transition-colors ${
-              activeTab === 'models' ? 'bg-norv/20 text-norv' : 'text-white/60 hover:text-white hover:bg-white/5'
-            }`}
-          >
-            <Bot className="w-4 h-4" />
-            AI Models
-          </button>
+          {/* API Keys & AI Models: super_admin only */}
+          {isSuperAdmin && (
+            <>
+              <button
+                onClick={() => setActiveTab('api')}
+                className={`w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm transition-colors ${
+                  activeTab === 'api' ? 'bg-norv/20 text-norv' : 'text-white/60 hover:text-white hover:bg-white/5'
+                }`}
+              >
+                <Key className="w-4 h-4" />
+                API Keys
+              </button>
+              <button
+                onClick={() => setActiveTab('models')}
+                className={`w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm transition-colors ${
+                  activeTab === 'models' ? 'bg-norv/20 text-norv' : 'text-white/60 hover:text-white hover:bg-white/5'
+                }`}
+              >
+                <Bot className="w-4 h-4" />
+                AI Models
+              </button>
+            </>
+          )}
           <button
             onClick={() => setActiveTab('notifications')}
             className={`w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm transition-colors ${
@@ -183,8 +190,8 @@ export default function SettingsPage() {
 
         {/* Content */}
         <div className="lg:col-span-3 bg-navy-800/50 border border-white/10 rounded-lg p-6">
-          {/* API Keys Tab */}
-          {activeTab === 'api' && (
+          {/* API Keys Tab — super_admin only */}
+          {activeTab === 'api' && isSuperAdmin && (
             <div className="space-y-6">
               <div>
                 <h2 className="text-lg font-medium text-white mb-2">API Keys</h2>
@@ -384,8 +391,8 @@ export default function SettingsPage() {
             </div>
           )}
 
-          {/* AI Models Tab */}
-          {activeTab === 'models' && (
+          {/* AI Models Tab — super_admin only */}
+          {activeTab === 'models' && isSuperAdmin && (
             <div className="space-y-6">
               <div>
                 <h2 className="text-lg font-medium text-white mb-2">AI Model Configuration</h2>

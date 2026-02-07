@@ -1,4 +1,4 @@
-import { createBrowserClient } from '@supabase/ssr'
+import { supabase } from '@/lib/supabase'
 import type { ContentGeneration } from '@/types/nordosc'
 
 // Calculate Levenshtein distance for edit tracking
@@ -31,14 +31,6 @@ function generateThreadId(): string {
   return `thread_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
 }
 
-// Create supabase client
-function getSupabase() {
-  return createBrowserClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-  )
-}
-
 export const nordoscLogger = {
   // Log content generation
   async logGeneration(data: {
@@ -60,7 +52,6 @@ export const nordoscLogger = {
     temperature?: number
   }): Promise<string | null> {
     try {
-      const supabase = getSupabase()
       const { data: result, error } = await supabase
         .from('content_generations')
         .insert({
@@ -95,7 +86,6 @@ export const nordoscLogger = {
   // Log user feedback (thumbs up/down)
   async logFeedback(generationId: string, thumbs: 'up' | 'down'): Promise<boolean> {
     try {
-      const supabase = getSupabase()
       const { error } = await supabase
         .from('content_generations')
         .update({
@@ -115,7 +105,6 @@ export const nordoscLogger = {
   // Log user edit
   async logEdit(generationId: string, originalContent: string, editedContent: string): Promise<boolean> {
     try {
-      const supabase = getSupabase()
       const editDistance = levenshteinDistance(originalContent, editedContent)
       
       const { error } = await supabase
@@ -149,7 +138,6 @@ export const nordoscLogger = {
     body: string
   }): Promise<{ sendId: string; threadId: string } | null> {
     try {
-      const supabase = getSupabase()
       const threadId = generateThreadId()
       
       const { data: result, error } = await supabase
@@ -196,7 +184,6 @@ export const nordoscLogger = {
   // Flag content for review
   async flagForReview(generationId: string, reason: string): Promise<boolean> {
     try {
-      const supabase = getSupabase()
       const { error } = await supabase
         .from('content_generations')
         .update({
@@ -216,7 +203,6 @@ export const nordoscLogger = {
   // Get scenario performance (for analytics)
   async getScenarioPerformance(days: number = 30): Promise<any[]> {
     try {
-      const supabase = getSupabase()
       const { data, error } = await supabase
         .from('scenario_performance')
         .select('*')
@@ -232,7 +218,6 @@ export const nordoscLogger = {
   // Get recent generations for a user
   async getRecentGenerations(userId: string, limit: number = 20): Promise<ContentGeneration[]> {
     try {
-      const supabase = getSupabase()
       const { data, error } = await supabase
         .from('content_generations')
         .select('*')
@@ -251,7 +236,6 @@ export const nordoscLogger = {
   // Get conversation thread
   async getThread(threadId: string): Promise<any> {
     try {
-      const supabase = getSupabase()
       
       const { data: thread } = await supabase
         .from('conversation_threads')

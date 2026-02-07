@@ -2,7 +2,7 @@
 
 import { useState, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
-import { createClient } from '@supabase/supabase-js'
+import { supabase } from '@/lib/supabase'
 import { 
   Users, 
   ShoppingCart,
@@ -27,17 +27,14 @@ import {
   Square,
   Loader2,
   Trash2,
-  Ban
+  Ban,
+  Upload
 } from 'lucide-react'
 import { PropertyCard } from './PropertyCard'
 import { FilterDropdown } from './FilterDropdown'
 import { Modal, ConfirmDialog } from '@/components/ui'
 import { useToast } from '@/components/ui/Toast'
-
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-)
+import { CSVUploadModal } from '@/components/csv-upload'
 
 // Types
 interface Phone {
@@ -201,6 +198,12 @@ export default function NorLeadApp({ initialLeads, filterOptions, stats }: Props
   const [deleteEmailConfirm, setDeleteEmailConfirm] = useState<Email | null>(null)
   const [bulkDeleteConfirm, setBulkDeleteConfirm] = useState(false)
   const [bulkDNCConfirm, setBulkDNCConfirm] = useState(false)
+
+  // CSV Upload + Delete All
+  const [showCSVUpload, setShowCSVUpload] = useState(false)
+  const [showDeleteAllConfirm, setShowDeleteAllConfirm] = useState(false)
+  const [deleteAllText, setDeleteAllText] = useState('')
+  const [isDeletingAll, setIsDeletingAll] = useState(false)
 
   // Form states
   const [propertyForm, setPropertyForm] = useState({
@@ -618,33 +621,46 @@ export default function NorLeadApp({ initialLeads, filterOptions, stats }: Props
     if (!deletePropertyConfirm) return
     setIsSubmitting(true)
 
-    // Check if in CRM
-    const { data: crmLead } = await supabase
-      .from('crm_leads')
-      .select('id')
-      .eq('property_id', deletePropertyConfirm.id)
-      .single()
+    const propId = deletePropertyConfirm.id
 
-    if (crmLead) {
-      // Delete from CRM first
-      await supabase.from('crm_leads').delete().eq('property_id', deletePropertyConfirm.id)
+    try {
+      // Get contact IDs for this property
+      const { data: contacts } = await supabase
+        .from('contacts')
+        .select('id')
+        .eq('property_id', propId)
+      const contactIds = contacts?.map(c => c.id) || []
+
+      // Delete children first
+      if (contactIds.length > 0) {
+        await supabase.from('emails').delete().in('contact_id', contactIds)
+        await supabase.from('phones').delete().in('contact_id', contactIds)
+      }
+      await supabase.from('email_queue').delete().eq('property_id', propId)
+      
+      // CRM
+      const { data: crmLead } = await supabase.from('crm_leads').select('id').eq('property_id', propId).single()
+      if (crmLead) {
+        await supabase.from('crm_activities').delete().eq('crm_lead_id', crmLead.id)
+        await supabase.from('crm_leads').delete().eq('property_id', propId)
+      }
+      
+      await supabase.from('call_log').delete().eq('property_id', propId)
+      await supabase.from('contacts').delete().eq('property_id', propId)
+
+      // Finally delete the property
+      const { error } = await supabase.from('properties').delete().eq('id', propId)
+      if (error) throw error
+
+      // Update local state
+      setLeads(prev => prev.filter(l => l.id !== propId))
+      showToast('Property deleted', 'success')
+    } catch (err: any) {
+      console.error('Delete property error:', err)
+      showToast('Failed to delete property: ' + err.message, 'error')
     }
-
-    const { error } = await supabase
-      .from('properties')
-      .delete()
-      .eq('id', deletePropertyConfirm.id)
 
     setIsSubmitting(false)
-
-    if (error) {
-      showToast('Failed to delete property: ' + error.message, 'error')
-      return
-    }
-
-    // Update local state
-    setLeads(prev => prev.filter(l => l.id !== deletePropertyConfirm.id))
-    showToast('Property deleted', 'success')
     setDeletePropertyConfirm(null)
   }
 
@@ -1040,27 +1056,41 @@ export default function NorLeadApp({ initialLeads, filterOptions, stats }: Props
 
     const ids = Array.from(selectedPropertyIds)
 
-    // Delete from CRM first
-    await supabase.from('crm_leads').delete().in('property_id', ids)
+    try {
+      // Get contact IDs for these properties
+      const { data: contacts } = await supabase
+        .from('contacts')
+        .select('id')
+        .in('property_id', ids)
+      const contactIds = contacts?.map(c => c.id) || []
 
-    // Delete properties
-    const { error } = await supabase
-      .from('properties')
-      .delete()
-      .in('id', ids)
+      // Delete in correct order: children first
+      if (contactIds.length > 0) {
+        await supabase.from('emails').delete().in('contact_id', contactIds)
+        await supabase.from('phones').delete().in('contact_id', contactIds)
+      }
+      await supabase.from('email_queue').delete().in('property_id', ids)
+      await supabase.from('crm_activities').delete().in('crm_lead_id', 
+        (await supabase.from('crm_leads').select('id').in('property_id', ids)).data?.map(l => l.id) || []
+      )
+      await supabase.from('crm_leads').delete().in('property_id', ids)
+      await supabase.from('call_log').delete().in('property_id', ids)
+      await supabase.from('contacts').delete().in('property_id', ids)
 
-    setIsSubmitting(false)
+      // Finally delete properties
+      const { error } = await supabase.from('properties').delete().in('id', ids)
+      if (error) throw error
 
-    if (error) {
-      showToast('Failed to delete properties: ' + error.message, 'error')
-      return
+      // Update local state
+      setLeads(prev => prev.filter(l => !selectedPropertyIds.has(l.id)))
+      clearSelection()
+      showToast(`${ids.length} properties deleted`, 'success')
+    } catch (err: any) {
+      console.error('Bulk delete error:', err)
+      showToast('Failed to delete properties: ' + err.message, 'error')
     }
 
-    // Update local state
-    setLeads(prev => prev.filter(l => !selectedPropertyIds.has(l.id)))
-    clearSelection()
-
-    showToast(`${ids.length} properties deleted`, 'success')
+    setIsSubmitting(false)
     setBulkDeleteConfirm(false)
   }
 
@@ -1098,17 +1128,126 @@ export default function NorLeadApp({ initialLeads, filterOptions, stats }: Props
     setBulkDNCConfirm(false)
   }
 
+  // Delete ALL leads (properties + contacts + phones + emails)
+  async function handleDeleteAll() {
+    if (deleteAllText !== 'DELETE') return
+    setIsDeletingAll(true)
+
+    try {
+      // Delete in correct order: dependent tables first, then parent tables
+      const errors: string[] = []
+
+      // 1. Email queue items
+      const { error: e1 } = await supabase.from('email_queue').delete().neq('id', '00000000-0000-0000-0000-000000000000')
+      if (e1) errors.push(`email_queue: ${e1.message}`)
+
+      // 2. CRM activities (depends on crm_leads)
+      const { data: crmIds } = await supabase.from('crm_leads').select('id')
+      if (crmIds && crmIds.length > 0) {
+        const { error: e2 } = await supabase.from('crm_activities').delete().in('crm_lead_id', crmIds.map(c => c.id))
+        if (e2) errors.push(`crm_activities: ${e2.message}`)
+      }
+
+      // 3. CRM leads
+      const { error: e3 } = await supabase.from('crm_leads').delete().neq('id', '00000000-0000-0000-0000-000000000000')
+      if (e3) errors.push(`crm_leads: ${e3.message}`)
+
+      // 4. Call log
+      const { error: e4 } = await supabase.from('call_log').delete().neq('id', '00000000-0000-0000-0000-000000000000')
+      if (e4) errors.push(`call_log: ${e4.message}`)
+
+      // 5. Emails
+      const { error: e5 } = await supabase.from('emails').delete().neq('id', '00000000-0000-0000-0000-000000000000')
+      if (e5) errors.push(`emails: ${e5.message}`)
+
+      // 6. Phones
+      const { error: e6 } = await supabase.from('phones').delete().neq('id', '00000000-0000-0000-0000-000000000000')
+      if (e6) errors.push(`phones: ${e6.message}`)
+
+      // 7. Contacts
+      const { error: e7 } = await supabase.from('contacts').delete().neq('id', '00000000-0000-0000-0000-000000000000')
+      if (e7) errors.push(`contacts: ${e7.message}`)
+
+      // 8. Properties (root table)
+      const { error: e8 } = await supabase.from('properties').delete().neq('id', '00000000-0000-0000-0000-000000000000')
+      if (e8) errors.push(`properties: ${e8.message}`)
+
+      if (errors.length > 0) {
+        console.error('Delete all errors:', errors)
+        showToast(`Partial delete - errors: ${errors.join('; ')}`, 'warning')
+      } else {
+        showToast('All lead data deleted', 'success')
+      }
+
+      setLeads([])
+      setSelectedPhones(new Set())
+      setSelectedEmails(new Set())
+    } catch (err: any) {
+      console.error('Delete all error:', err)
+      showToast('Failed to delete: ' + (err.message || 'Unknown error'), 'error')
+    } finally {
+      setIsDeletingAll(false)
+      setShowDeleteAllConfirm(false)
+      setDeleteAllText('')
+    }
+  }
+
+  // Refresh leads after CSV import
+  async function handleImportComplete() {
+    try {
+      const { data } = await supabase
+        .from('properties')
+        .select(`
+          *,
+          contacts (
+            *,
+            phones (*),
+            emails (*)
+          )
+        `)
+        .order('created_at', { ascending: false })
+
+      if (data) {
+        setLeads(data)
+        showToast('Leads refreshed', 'success')
+      }
+    } catch (err) {
+      // Reload page as fallback
+      window.location.reload()
+    }
+  }
+
   return (
     <div className="min-h-screen">
       {/* Header */}
       <div className="mb-6">
-        <div className="flex items-center gap-3 mb-2">
-          <div className="w-3 h-3 rounded-full bg-norx" />
-          <h1 className="text-2xl font-bold text-white">NorLead</h1>
+        <div className="flex items-center justify-between">
+          <div>
+            <div className="flex items-center gap-3 mb-2">
+              <div className="w-3 h-3 rounded-full bg-norx" />
+              <h1 className="text-2xl font-bold text-white">NorLead</h1>
+            </div>
+            <p className="text-white/50">
+              Find motivated sellers ready to make a move
+            </p>
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setShowCSVUpload(true)}
+              className="flex items-center gap-2 px-4 py-2 bg-norv/20 hover:bg-norv/30 text-norv rounded-lg transition"
+            >
+              <Upload size={18} />
+              <span>Upload CSV</span>
+            </button>
+            <button
+              onClick={() => setShowDeleteAllConfirm(true)}
+              className="flex items-center gap-2 px-4 py-2 bg-red-500/20 hover:bg-red-500/30 text-red-400 rounded-lg transition"
+            >
+              <Trash2 size={18} />
+              <span>Delete All</span>
+            </button>
+          </div>
         </div>
-        <p className="text-white/50">
-          Find motivated sellers ready to make a move
-        </p>
       </div>
 
       {/* Section Tabs: Sellers / Buyers */}
@@ -2058,6 +2197,70 @@ export default function NorLeadApp({ initialLeads, filterOptions, stats }: Props
         variant="warning"
         isLoading={isSubmitting}
       />
+
+      {/* CSV Upload Modal */}
+      <CSVUploadModal
+        isOpen={showCSVUpload}
+        onClose={() => setShowCSVUpload(false)}
+        onImportComplete={handleImportComplete}
+        existingCount={leads.length}
+      />
+
+      {/* Delete All Confirmation */}
+      {showDeleteAllConfirm && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center">
+          <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={() => { setShowDeleteAllConfirm(false); setDeleteAllText('') }} />
+          <div className="relative bg-navy-800 border border-white/20 rounded-2xl shadow-2xl w-full max-w-md mx-4 p-6">
+            <div className="flex justify-center mb-4">
+              <div className="w-14 h-14 rounded-full bg-red-500/20 flex items-center justify-center">
+                <AlertTriangle size={28} className="text-red-400" />
+              </div>
+            </div>
+            <h3 className="text-lg font-semibold text-white text-center mb-2">Delete All Lead Data?</h3>
+            <div className="bg-red-500/10 border border-red-500/20 rounded-xl p-4 mb-4">
+              <p className="text-white/70 text-sm mb-2">This will permanently delete:</p>
+              <ul className="space-y-1 text-sm text-white/80">
+                <li className="flex items-center gap-2"><span className="w-1.5 h-1.5 rounded-full bg-red-400" />{leads.length} properties</li>
+                <li className="flex items-center gap-2"><span className="w-1.5 h-1.5 rounded-full bg-red-400" />All contacts, phones, and emails</li>
+                <li className="flex items-center gap-2"><span className="w-1.5 h-1.5 rounded-full bg-red-400" />All CRM leads and activities</li>
+                <li className="flex items-center gap-2"><span className="w-1.5 h-1.5 rounded-full bg-red-400" />All queued calls and emails</li>
+              </ul>
+              <p className="text-red-400 text-xs mt-3 font-medium">This cannot be undone.</p>
+            </div>
+            <div className="mb-4">
+              <p className="text-white/50 text-xs mb-2">Type <strong className="text-red-400">DELETE</strong> to confirm:</p>
+              <input
+                type="text"
+                value={deleteAllText}
+                onChange={(e) => setDeleteAllText(e.target.value)}
+                placeholder="Type DELETE"
+                className="w-full bg-navy-900 border border-red-500/30 rounded-lg px-3 py-2 text-sm text-white placeholder-white/30 focus:outline-none focus:border-red-500"
+              />
+            </div>
+            <div className="flex items-center gap-3">
+              <button
+                onClick={() => { setShowDeleteAllConfirm(false); setDeleteAllText('') }}
+                disabled={isDeletingAll}
+                className="flex-1 px-4 py-2.5 rounded-lg bg-white/10 text-white hover:bg-white/20 transition text-sm font-medium"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleDeleteAll}
+                disabled={isDeletingAll || deleteAllText !== 'DELETE'}
+                className="flex-1 px-4 py-2.5 rounded-lg bg-red-600 hover:bg-red-500 text-white transition text-sm font-medium flex items-center justify-center gap-2 disabled:opacity-30 disabled:cursor-not-allowed"
+              >
+                {isDeletingAll ? (
+                  <Loader2 size={16} className="animate-spin" />
+                ) : (
+                  <Trash2 size={16} />
+                )}
+                Delete Everything
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

@@ -3,8 +3,9 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
-import { ArrowLeft, Wand2, Save, Play, ChevronDown, Plus, X, Info } from 'lucide-react'
+import { ArrowLeft, Wand2, Save, Play, ChevronDown, Plus, X, Info, Lock } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
+import { useCurrentView } from '@/hooks/useCurrentView'
 
 interface AgentFormData {
   name: string
@@ -54,6 +55,7 @@ const defaultFormData: AgentFormData = {
 
 export default function NewAgentPage() {
   const router = useRouter()
+  const { isSuperAdmin } = useCurrentView()
   
   const [formData, setFormData] = useState<AgentFormData>(defaultFormData)
   const [saving, setSaving] = useState(false)
@@ -416,59 +418,71 @@ Your role is to ${formData.description || 'assist with real estate inquiries'}.
 
         {/* Right Column - Prompt Components */}
         <div className="space-y-6">
-          {/* Agent Prompt */}
-          <div className="bg-navy-800/50 border border-white/10 rounded-lg p-4">
-            <h2 className="text-lg font-medium text-white mb-4">Agent Prompt</h2>
-            
-            <div className="space-y-4">
-              <div>
-                <div className="flex items-center gap-2 mb-1">
-                  <label className="block text-sm font-medium text-white/80">Persona & Role</label>
-                  <span className="px-1.5 py-0.5 bg-norv/20 text-norv text-xs rounded">Primary</span>
+          {/* Agent Prompt — super_admin only */}
+          {isSuperAdmin ? (
+            <div className="bg-navy-800/50 border border-white/10 rounded-lg p-4">
+              <h2 className="text-lg font-medium text-white mb-4">Agent Prompt</h2>
+              
+              <div className="space-y-4">
+                <div>
+                  <div className="flex items-center gap-2 mb-1">
+                    <label className="block text-sm font-medium text-white/80">Persona & Role</label>
+                    <span className="px-1.5 py-0.5 bg-norv/20 text-norv text-xs rounded">Primary</span>
+                  </div>
+                  <textarea
+                    value={formData.persona_role}
+                    onChange={(e) => updateField('persona_role', e.target.value)}
+                    placeholder="Define who this agent is and their primary role..."
+                    rows={6}
+                    className="w-full px-3 py-2 bg-navy-900 border border-white/10 rounded-lg text-white placeholder-white/30 focus:border-norv focus:outline-none resize-none font-mono text-sm"
+                  />
                 </div>
-                <textarea
-                  value={formData.persona_role}
-                  onChange={(e) => updateField('persona_role', e.target.value)}
-                  placeholder="Define who this agent is and their primary role..."
-                  rows={6}
-                  className="w-full px-3 py-2 bg-navy-900 border border-white/10 rounded-lg text-white placeholder-white/30 focus:border-norv focus:outline-none resize-none font-mono text-sm"
-                />
-              </div>
 
-              <div>
-                <label className="block text-sm font-medium text-white/80 mb-1">Skills</label>
-                <textarea
-                  value={formData.skills}
-                  onChange={(e) => updateField('skills', e.target.value)}
-                  placeholder="List the agent's capabilities and skills..."
-                  rows={4}
-                  className="w-full px-3 py-2 bg-navy-900 border border-white/10 rounded-lg text-white placeholder-white/30 focus:border-norv focus:outline-none resize-none font-mono text-sm"
-                />
-              </div>
+                <div>
+                  <label className="block text-sm font-medium text-white/80 mb-1">Skills</label>
+                  <textarea
+                    value={formData.skills}
+                    onChange={(e) => updateField('skills', e.target.value)}
+                    placeholder="List the agent's capabilities and skills..."
+                    rows={4}
+                    className="w-full px-3 py-2 bg-navy-900 border border-white/10 rounded-lg text-white placeholder-white/30 focus:border-norv focus:outline-none resize-none font-mono text-sm"
+                  />
+                </div>
 
-              <div>
-                <label className="block text-sm font-medium text-white/80 mb-1">Knowledge Base</label>
-                <textarea
-                  value={formData.knowledge_base}
-                  onChange={(e) => updateField('knowledge_base', e.target.value)}
-                  placeholder="Product info, services, FAQs, etc..."
-                  rows={4}
-                  className="w-full px-3 py-2 bg-navy-900 border border-white/10 rounded-lg text-white placeholder-white/30 focus:border-norv focus:outline-none resize-none font-mono text-sm"
-                />
-              </div>
+                <div>
+                  <label className="block text-sm font-medium text-white/80 mb-1">Knowledge Base</label>
+                  <textarea
+                    value={formData.knowledge_base}
+                    onChange={(e) => updateField('knowledge_base', e.target.value)}
+                    placeholder="Product info, services, FAQs, etc..."
+                    rows={4}
+                    className="w-full px-3 py-2 bg-navy-900 border border-white/10 rounded-lg text-white placeholder-white/30 focus:border-norv focus:outline-none resize-none font-mono text-sm"
+                  />
+                </div>
 
-              <div>
-                <label className="block text-sm font-medium text-white/80 mb-1">Constraints</label>
-                <textarea
-                  value={formData.constraints}
-                  onChange={(e) => updateField('constraints', e.target.value)}
-                  placeholder="What the agent should NOT do..."
-                  rows={3}
-                  className="w-full px-3 py-2 bg-navy-900 border border-white/10 rounded-lg text-white placeholder-white/30 focus:border-norv focus:outline-none resize-none font-mono text-sm"
-                />
+                <div>
+                  <label className="block text-sm font-medium text-white/80 mb-1">Constraints</label>
+                  <textarea
+                    value={formData.constraints}
+                    onChange={(e) => updateField('constraints', e.target.value)}
+                    placeholder="What the agent should NOT do..."
+                    rows={3}
+                    className="w-full px-3 py-2 bg-navy-900 border border-white/10 rounded-lg text-white placeholder-white/30 focus:border-norv focus:outline-none resize-none font-mono text-sm"
+                  />
+                </div>
               </div>
             </div>
-          </div>
+          ) : (
+            <div className="bg-navy-800/50 border border-white/10 rounded-lg p-6">
+              <div className="flex items-center gap-3 text-white/40">
+                <Lock className="w-5 h-5" />
+                <div>
+                  <h3 className="text-white/60 font-medium">Agent Prompt</h3>
+                  <p className="text-sm">Prompt editing is restricted to super admins only.</p>
+                </div>
+              </div>
+            </div>
+          )}
 
           {/* Dynamic Variables */}
           <div className="bg-navy-800/50 border border-white/10 rounded-lg p-4">

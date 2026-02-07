@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import { Send, Sparkles, Copy, Check, RotateCcw } from 'lucide-react'
-import { createBrowserClient } from '@supabase/ssr'
+import { supabase } from '@/lib/supabase'
 import { nordoscLogger } from '@/lib/nordosc-logger'
 import GenerationFeedback from './GenerationFeedback'
 import type { Lead, Scenario } from '@/types/nordosc'
@@ -24,11 +24,6 @@ export default function EmailWriter({ lead, scenarios, agentName = 'Agent', agen
   const [copied, setCopied] = useState(false)
   const [sending, setSending] = useState(false)
   const [sent, setSent] = useState(false)
-
-  const supabase = createBrowserClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-  )
 
   async function generateEmail() {
     if (!selectedScenario) return

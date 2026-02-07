@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useMemo } from 'react'
-import { createClient } from '@supabase/supabase-js'
+import { supabase } from '@/lib/supabase'
 import { 
   Users,
   Phone,
@@ -22,17 +22,18 @@ import {
   Trash2,
   LogOut,
   CheckSquare,
-  Square
+  Square,
+  Upload,
+  Mail
 } from 'lucide-react'
 import { LeadDetailPanel } from './LeadDetailPanel'
 import { ConfirmDialog } from '@/components/ui'
 import { useToast } from '@/components/ui/Toast'
 import { CallQueueButton, CallQueuePanel } from '@/components/call-queue'
-
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-)
+import { EmailQueueButton } from '@/components/email-queue'
+import { CSVUploadModal } from '@/components/csv-upload'
+import { BulkDeleteDialog } from '@/components/bulk-delete'
+import { addLeadsToEmailQueue } from '@/lib/email-queue-actions'
 
 // Types
 interface Property {
@@ -128,6 +129,15 @@ export default function NorCRMApp({ initialStats, initialLeads }: Props) {
   // Call Queue
   const [isQueueOpen, setIsQueueOpen] = useState(false)
   const [isAddingToQueue, setIsAddingToQueue] = useState(false)
+
+  // CSV Upload
+  const [showCSVUpload, setShowCSVUpload] = useState(false)
+
+  // Bulk Delete
+  const [showBulkDelete, setShowBulkDelete] = useState(false)
+
+  // Email Queue
+  const [isAddingToEmailQueue, setIsAddingToEmailQueue] = useState(false)
 
   // Filter leads
   const filteredLeads = useMemo(() => {
@@ -390,6 +400,68 @@ export default function NorCRMApp({ initialStats, initialLeads }: Props) {
     setIsAddingToQueue(false)
   }
 
+  // Handle CSV import complete — refresh all data
+  const handleImportComplete = async () => {
+    const { data: newLeads } = await supabase
+      .from('crm_leads')
+      .select(`
+        *,
+        property:properties (
+          id, street_address, city, state, zip, price, sqft, beds, baths,
+          year_built, list_date, dom, status, source,
+          contacts (
+            id, name, role, is_decision_maker,
+            phones (id, number, is_dnc),
+            emails (id, email)
+          )
+        )
+      `)
+      .order('next_action_date', { ascending: true, nullsFirst: false })
+
+    if (newLeads) {
+      const enriched = newLeads.map((lead: any) => ({
+        ...lead,
+        callablePhones: lead.property?.contacts?.reduce(
+          (sum: number, c: any) => sum + (c.phones?.filter((p: any) => !p.is_dnc).length || 0), 0
+        ) || 0,
+        totalEmails: lead.property?.contacts?.reduce(
+          (sum: number, c: any) => sum + (c.emails?.length || 0), 0
+        ) || 0,
+      }))
+      setLeads(enriched)
+    }
+    refreshStats()
+  }
+
+  // Handle bulk delete
+  const handleBulkDelete = (deletedIds: string[]) => {
+    // Remove from leads by property_id
+    setLeads(prev => prev.filter(l => !deletedIds.includes(l.property_id)))
+    clearSelection()
+    showToast(`${deletedIds.length} properties deleted`, 'success')
+    setShowBulkDelete(false)
+    refreshStats()
+  }
+
+  // Add to Email Queue
+  const handleAddToEmailQueue = async (queueNumber: number) => {
+    if (selectedLeadIds.size === 0) return
+    setIsAddingToEmailQueue(true)
+
+    console.log('[Email Queue] Adding leads:', Array.from(selectedLeadIds), 'to queue', queueNumber)
+    const result = await addLeadsToEmailQueue(Array.from(selectedLeadIds), queueNumber)
+    console.log('[Email Queue] Result:', result)
+
+    if (result.success) {
+      showToast(result.message, 'success')
+      clearSelection()
+    } else {
+      showToast(result.message || 'Failed to add to email queue', 'error')
+    }
+
+    setIsAddingToEmailQueue(false)
+  }
+
   return (
     <div className="min-h-screen">
       {/* Header */}
@@ -404,13 +476,22 @@ export default function NorCRMApp({ initialStats, initialLeads }: Props) {
               Manage your {stats.total} active leads
             </p>
           </div>
-          <button
-            onClick={() => setIsQueueOpen(true)}
-            className="flex items-center gap-2 px-4 py-2 bg-green-600/20 hover:bg-green-600/30 text-green-400 rounded-lg transition"
-          >
-            <Phone size={18} />
-            <span>Call Queue</span>
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setShowCSVUpload(true)}
+              className="flex items-center gap-2 px-4 py-2 bg-norv/20 hover:bg-norv/30 text-norv rounded-lg transition"
+            >
+              <Upload size={18} />
+              <span>Upload CSV</span>
+            </button>
+            <button
+              onClick={() => setIsQueueOpen(true)}
+              className="flex items-center gap-2 px-4 py-2 bg-green-600/20 hover:bg-green-600/30 text-green-400 rounded-lg transition"
+            >
+              <Phone size={18} />
+              <span>Call Queue</span>
+            </button>
+          </div>
         </div>
       </div>
 
@@ -547,6 +628,12 @@ export default function NorCRMApp({ initialStats, initialLeads }: Props) {
                 onAddToQueue={handleAddToQueue}
                 disabled={isAddingToQueue}
               />
+              {/* Email Queue Dropdown */}
+              <EmailQueueButton
+                selectedCount={selectedLeadIds.size}
+                onAddToQueue={handleAddToEmailQueue}
+                disabled={isAddingToEmailQueue}
+              />
               <button
                 onClick={() => setBulkStatusModal(true)}
                 className="px-4 py-2 rounded-lg bg-white/10 text-white hover:bg-white/20 transition-colors"
@@ -558,6 +645,13 @@ export default function NorCRMApp({ initialStats, initialLeads }: Props) {
                 className="px-4 py-2 rounded-lg bg-white/10 text-white hover:bg-white/20 transition-colors"
               >
                 Change Priority
+              </button>
+              <button
+                onClick={() => setShowBulkDelete(true)}
+                className="px-4 py-2 rounded-lg bg-red-600/20 text-red-400 hover:bg-red-600/30 transition-colors flex items-center gap-2"
+              >
+                <Trash2 size={16} />
+                Delete ({selectedLeadIds.size})
               </button>
               <button
                 onClick={() => setBulkRemoveConfirm(true)}
@@ -743,6 +837,26 @@ export default function NorCRMApp({ initialStats, initialLeads }: Props) {
         isOpen={isQueueOpen} 
         onClose={() => setIsQueueOpen(false)} 
       />
+
+      {/* CSV Upload Modal */}
+      <CSVUploadModal
+        isOpen={showCSVUpload}
+        onClose={() => setShowCSVUpload(false)}
+        onImportComplete={handleImportComplete}
+        existingCount={leads.length}
+      />
+
+      {/* Bulk Delete Dialog */}
+      <BulkDeleteDialog
+        isOpen={showBulkDelete}
+        onClose={() => setShowBulkDelete(false)}
+        selectedPropertyIds={Array.from(selectedLeadIds).map(id => {
+          const lead = leads.find(l => l.id === id)
+          return lead?.property_id || ''
+        }).filter(Boolean)}
+        onDeleteComplete={handleBulkDelete}
+      />
+
     </div>
   )
 }
@@ -884,6 +998,12 @@ function LeadCard({
                     <span>{lead.callablePhones}</span>
                   </div>
                 )}
+
+                {/* Emails */}
+                <div className={`flex items-center gap-1 ${lead.totalEmails > 0 ? 'text-amber-400' : 'text-white/30'}`}>
+                  <Mail size={14} />
+                  <span>{lead.totalEmails || 0}</span>
+                </div>
 
                 {/* Last Activity */}
                 {lead.last_activity_date && (

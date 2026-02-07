@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect } from 'react'
 import Link from 'next/link'
+import Image from 'next/image'
 import { usePathname } from 'next/navigation'
 import {
   ChevronDown,
@@ -22,8 +23,6 @@ import { agentNavigation, adminNavigation, NavSection, NavItem } from '@/config/
 import { supabase } from '@/lib/supabase'
 import { cn } from '@/lib/utils'
 import { useTheme } from '@/contexts/ThemeContext'
-import { createBrowserClient } from '@supabase/ssr'
-
 export default function Sidebar() {
   const pathname = usePathname()
   const router = useRouter()
@@ -34,12 +33,6 @@ export default function Sidebar() {
   const [pinnedItems, setPinnedItems] = useState<string[]>([])
   const [loggingOut, setLoggingOut] = useState(false)
 
-  // Create supabase client for auth
-  const supabaseAuth = createBrowserClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-  )
-
   async function handleLogout() {
     setLoggingOut(true)
     try {
@@ -47,7 +40,7 @@ export default function Sidebar() {
       localStorage.removeItem('homenest_current_view')
       localStorage.removeItem('homenest_user_role')
       
-      await supabaseAuth.auth.signOut()
+      await supabase.auth.signOut()
       router.push('/login')
       router.refresh()
     } catch (error) {
@@ -223,77 +216,97 @@ export default function Sidebar() {
 
       {/* Navigation Sections */}
       <nav className="flex-1 overflow-y-auto py-2">
-        {navigation.map(section => (
-          <div key={section.key} className="mb-2">
-            {isCollapsed ? (
-              // Collapsed: Just show a colored dot as section indicator
-              <div className="flex justify-center py-2">
-                <div 
-                  className="w-2 h-2 rounded-full" 
-                  style={{ backgroundColor: section.color }}
-                  title={section.label}
-                />
-              </div>
-            ) : (
-              <button
-                onClick={() => toggleSection(section.key)}
-                className="w-full flex items-center justify-between px-4 py-2 text-xs font-medium text-white/40 uppercase tracking-wider hover:text-white/60 sidebar-section-title"
-              >
-                <div className="flex items-center gap-2">
+        {navigation.map(section => {
+          // Filter out superAdminOnly items if user is not super_admin
+          const visibleItems = section.items.filter(item => {
+            if (item.superAdminOnly && userRole !== 'super_admin') return false
+            return true
+          })
+
+          if (visibleItems.length === 0) return null
+
+          return (
+            <div key={section.key} className="mb-2">
+              {isCollapsed ? (
+                // Collapsed: Just show a colored dot as section indicator
+                <div className="flex justify-center py-2">
                   <div 
                     className="w-2 h-2 rounded-full" 
                     style={{ backgroundColor: section.color }}
+                    title={section.label}
                   />
-                  <span>{section.label}</span>
                 </div>
-                <ChevronDown 
-                  className={cn(
-                    "w-4 h-4 transition-transform",
-                    expandedSections.includes(section.key) ? '' : '-rotate-90'
-                  )}
-                />
-              </button>
-            )}
-
-            {(isCollapsed || expandedSections.includes(section.key)) && (
-              <div className={cn("mt-1 space-y-0.5", isCollapsed ? "px-1" : "px-2")}>
-                {section.items.map(item => (
-                  <div key={item.key} className="group flex items-center">
-                    <Link
-                      href={item.href}
-                      className={cn(
-                        "flex-1 flex items-center rounded-md text-sm transition-colors",
-                        isCollapsed ? "justify-center p-2" : "gap-2 px-3 py-2",
-                        pathname === item.href
-                          ? 'bg-norv/20 text-norv'
-                          : 'text-white/60 hover:text-white hover:bg-white/5'
-                      )}
-                      title={isCollapsed ? item.label : undefined}
-                    >
-                      <item.icon className="w-4 h-4 flex-shrink-0" />
-                      {!isCollapsed && <span className="sidebar-label">{item.label}</span>}
-                    </Link>
-                    
-                    {/* Pin button (agent view only, expanded only) */}
-                    {currentView === 'agent' && !isCollapsed && (
-                      <button
-                        onClick={() => togglePin(item)}
-                        className="opacity-0 group-hover:opacity-100 p-1 hover:bg-white/10 rounded transition-opacity"
-                        title={pinnedItems.includes(item.href) ? 'Unpin' : 'Pin to Quick Access'}
-                      >
-                        {pinnedItems.includes(item.href) ? (
-                          <PinOff className="w-3 h-3 text-norv" />
-                        ) : (
-                          <Pin className="w-3 h-3 text-white/40" />
-                        )}
-                      </button>
+              ) : (
+                <button
+                  onClick={() => toggleSection(section.key)}
+                  className="w-full flex items-center justify-between px-4 py-2 text-xs font-medium uppercase tracking-wider hover:text-white/60 sidebar-section-title"
+                >
+                  <div className="flex items-center gap-2">
+                    <div 
+                      className="w-2 h-2 rounded-full" 
+                      style={{ backgroundColor: section.color }}
+                    />
+                    {/* Axis label: "Nor" in white, letter in axis color, subtitle in muted */}
+                    {section.axisPrefix ? (
+                      <span>
+                        <span className="text-white/70">{section.axisPrefix}</span>
+                        <span style={{ color: section.color }} className="font-semibold">{section.axisLetter}</span>
+                        <span className="text-white/40"> — {section.axisSubtitle}</span>
+                      </span>
+                    ) : (
+                      <span className="text-white/40">{section.axisSubtitle}</span>
                     )}
                   </div>
-                ))}
-              </div>
-            )}
-          </div>
-        ))}
+                  <ChevronDown 
+                    className={cn(
+                      "w-4 h-4 text-white/40 transition-transform",
+                      expandedSections.includes(section.key) ? '' : '-rotate-90'
+                    )}
+                  />
+                </button>
+              )}
+
+              {(isCollapsed || expandedSections.includes(section.key)) && (
+                <div className={cn("mt-1 space-y-0.5", isCollapsed ? "px-1" : "px-2")}>
+                  {visibleItems.map(item => (
+                    <div key={item.key} className="group flex items-center">
+                      <Link
+                        href={item.href}
+                        className={cn(
+                          "flex-1 flex items-center rounded-md text-sm transition-colors",
+                          isCollapsed ? "justify-center p-2" : "gap-2 px-3 py-2",
+                          pathname === item.href
+                            ? 'bg-norv/20 text-norv'
+                            : 'text-white/60 hover:text-white hover:bg-white/5'
+                        )}
+                        title={isCollapsed ? item.label : undefined}
+                      >
+                        {/* Tool icon: use custom branded icon if available, else Lucide with axis color */}
+                        <ToolIcon item={item} sectionColor={section.color} isActive={pathname === item.href} />
+                        {!isCollapsed && <span className="sidebar-label">{item.label}</span>}
+                      </Link>
+                      
+                      {/* Pin button (agent view only, expanded only) */}
+                      {currentView === 'agent' && !isCollapsed && (
+                        <button
+                          onClick={() => togglePin(item)}
+                          className="opacity-0 group-hover:opacity-100 p-1 hover:bg-white/10 rounded transition-opacity"
+                          title={pinnedItems.includes(item.href) ? 'Unpin' : 'Pin to Quick Access'}
+                        >
+                          {pinnedItems.includes(item.href) ? (
+                            <PinOff className="w-3 h-3 text-norv" />
+                          ) : (
+                            <Pin className="w-3 h-3 text-white/40" />
+                          )}
+                        </button>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )
+        })}
       </nav>
 
       {/* Footer */}
@@ -359,5 +372,46 @@ export default function Sidebar() {
         </button>
       </div>
     </aside>
+  )
+}
+
+/**
+ * ToolIcon: Renders the Lucide icon with the axis color applied.
+ * 
+ * When custom branded icons are added to /public/icons/{axis}/{key}.svg,
+ * the iconPath in navigation.ts config marks where each icon should go.
+ * To enable custom icons, set NEXT_PUBLIC_USE_CUSTOM_ICONS=true in .env.local
+ * and ensure the SVG/PNG files exist at the specified iconPath.
+ */
+function ToolIcon({ item, sectionColor, isActive }: { item: NavItem; sectionColor: string; isActive: boolean }) {
+  const useCustomIcons = process.env.NEXT_PUBLIC_USE_CUSTOM_ICONS === 'true'
+  const [customLoaded, setCustomLoaded] = useState(false)
+
+  const Icon = item.icon
+  const lucideIcon = (
+    <Icon
+      className="w-4 h-4 flex-shrink-0"
+      style={{ color: isActive ? undefined : sectionColor }}
+    />
+  )
+
+  // Only attempt to load custom icons if enabled via env var and path is set
+  if (!useCustomIcons || !item.iconPath) return lucideIcon
+
+  return (
+    <>
+      <Image
+        src={item.iconPath}
+        alt=""
+        width={16}
+        height={16}
+        className={`w-4 h-4 flex-shrink-0 ${customLoaded ? 'block' : 'hidden'}`}
+        style={{ filter: isActive ? undefined : `drop-shadow(0 0 0 ${sectionColor})` }}
+        onLoad={() => setCustomLoaded(true)}
+        onError={() => setCustomLoaded(false)}
+        unoptimized
+      />
+      {!customLoaded && lucideIcon}
+    </>
   )
 }
